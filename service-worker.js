@@ -1,27 +1,5 @@
-const CACHE = 'sprite-tracker-v1';
-const ASSETS = [
-  './',
-  './index.html',
-  './manifest.webmanifest',
-  './icons/icon-180.png',
-  './icons/icon-192.png',
-  './icons/icon-512.png'
-];
-self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));
-  self.skipWaiting();
-});
-self.addEventListener('activate', event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))));
-  self.clients.claim();
-});
-self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
-  event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
-      const copy = response.clone();
-      caches.open(CACHE).then(cache => cache.put(event.request, copy));
-      return response;
-    }).catch(() => caches.match('./index.html')))
-  );
-});
+const CACHE='sprite-checklist-v1';
+const FILES=["./", "./index.html", "./styles.css", "./data.js", "./app.js", "./manifest.json", "./icon-192.png", "./icon-512.png", "./assets/sprites/water-base.png", "./assets/sprites/water-gold.png", "./assets/sprites/water-galaxy.png", "./assets/sprites/water-gummy.png", "./assets/sprites/water-holofoil.webp", "./assets/sprites/earth-base.png", "./assets/sprites/earth-gold.png", "./assets/sprites/earth-galaxy.png", "./assets/sprites/earth-gummy.png", "./assets/sprites/fire-base.png", "./assets/sprites/fire-gold.png", "./assets/sprites/fire-galaxy.png", "./assets/sprites/fire-gummy.png", "./assets/sprites/fire-holofoil.webp", "./assets/sprites/fishy-base.png", "./assets/sprites/fishy-gold.png", "./assets/sprites/fishy-galaxy.png", "./assets/sprites/fishy-gummy.png", "./assets/sprites/duck-base.png", "./assets/sprites/duck-gold.png", "./assets/sprites/duck-galaxy.png", "./assets/sprites/duck-gummy.png", "./assets/sprites/ghost-base.png", "./assets/sprites/ghost-gold.png", "./assets/sprites/ghost-galaxy.png", "./assets/sprites/ghost-gummy.png", "./assets/sprites/ghost-holofoil.webp", "./assets/sprites/demon-base.png", "./assets/sprites/demon-gold.png", "./assets/sprites/demon-galaxy.png", "./assets/sprites/demon-gummy.png", "./assets/sprites/king-base.png", "./assets/sprites/king-gold.png", "./assets/sprites/king-galaxy.png", "./assets/sprites/king-gummy.png", "./assets/sprites/king-holofoil.webp", "./assets/sprites/striker-base.png", "./assets/sprites/striker-gold.png", "./assets/sprites/striker-galaxy.png", "./assets/sprites/striker-gummy.png", "./assets/sprites/striker-holofoil.webp", "./assets/sprites/aura-base.png", "./assets/sprites/aura-gold.png", "./assets/sprites/aura-galaxy.png", "./assets/sprites/aura-gummy.png", "./assets/sprites/dream-base.png", "./assets/sprites/dream-gold.png", "./assets/sprites/dream-galaxy.png", "./assets/sprites/dream-gummy.png", "./assets/sprites/punk-base.png", "./assets/sprites/punk-gold.png", "./assets/sprites/punk-galaxy.png", "./assets/sprites/punk-gummy.png", "./assets/sprites/boss-base.png", "./assets/sprites/boss-gold.png", "./assets/sprites/boss-galaxy.png", "./assets/sprites/boss-gummy.png", "./assets/sprites/burnt-peanut-base.png", "./assets/sprites/zero-point-base.png", "./assets/sprites/zero-point-gold.png", "./assets/sprites/zero-point-galaxy.png", "./assets/sprites/zero-point-gummy.png", "./assets/sprites/grim-base.png", "./assets/sprites/grim-gold.png", "./assets/sprites/grim-galaxy.png", "./assets/sprites/grim-gummy.png"];
+self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES))));
+self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))));
+self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));
