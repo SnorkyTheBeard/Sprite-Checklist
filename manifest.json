@@ -1,21 +1,10 @@
 {
-  "name": "Sprite Checklist",
-  "short_name": "Sprites",
-  "start_url": "./",
-  "scope": "./",
-  "display": "standalone",
-  "background_color": "#07111c",
-  "theme_color": "#07111c",
-  "icons": [
-    {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ]
+  "name":"Galaxy Sprite Tracker",
+  "short_name":"Sprite Tracker",
+  "start_url":"./",
+  "scope":"./",
+  "display":"standalone",
+  "background_color":"#090b26",
+  "theme_color":"#111342",
+  "icons":[]
 }

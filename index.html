@@ -2,29 +2,32 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#07111c">
-  <title>Sprite Checklist</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111342">
+  <title>Galaxy Sprite Tracker</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="app">
-    <header>
-      <div class="eyebrow">Sprite Checklist</div>
-      <h1>Sprite Collection</h1>
-      <p>Tap a sprite or Collected to mark it obtained. Tap the crown above its head to mark it mastered.</p>
-      <div class="stats">
-        <div class="stat"><b id="collectedCount">0 / 66</b><span>Collected</span></div>
-        <div class="stat"><b id="masteredCount">0 / 66</b><span>Mastered</span></div>
+  <div class="app-shell">
+    <header class="hero">
+      <p class="kicker">Fortnite Collection Tracker</p>
+      <h1>Galaxy Sprite Tracker</h1>
+      <p class="sub">Tap a sprite to mark it collected. Tap the crown above it to mark it mastered.</p>
+      <div class="summary">
+        <div><strong id="collectedTotal">0 / 61</strong><span>Collected</span></div>
+        <div><strong id="masteredTotal">0 / 61</strong><span>Mastered</span></div>
       </div>
     </header>
-    <nav class="tabs" id="tabs" aria-label="Sprite rarity"></nav>
-    <main id="main"></main>
-    <p class="swipe-hint">Swipe sideways inside each collection to see every released variant.</p>
-    <button class="reset" id="reset" type="button">Reset checklist</button>
+
+    <nav class="rarity-tabs" id="rarityTabs" aria-label="Sprite rarities"></nav>
+    <main id="collections"></main>
+
+    <footer>
+      <button id="resetBtn" class="reset-btn" type="button">Reset all progress</button>
+    </footer>
   </div>
+
   <script src="data.js"></script>
   <script src="app.js"></script>
 </body>

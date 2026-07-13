@@ -1,6 +1,6 @@
-SPRITE CHECKLIST
+GALAXY SPRITE TRACKER
 
-Upload every file and folder in this package to the root of your GitHub repository.
-Do not upload only index.html; the assets folder, CSS, JavaScript, manifest, icons, and service worker are required.
-
-The app contains 66 currently released sprites and uses sideways swipe rows on mobile.
+1. Open index.html to preview locally.
+2. Upload every file and the full assets folder to your GitHub Pages repository.
+3. Progress is saved in the browser on each device.
+4. Each sprite-family row swipes sideways on phones.
