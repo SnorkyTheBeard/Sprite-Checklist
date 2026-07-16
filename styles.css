@@ -243,7 +243,8 @@ body.edit-mode .is-hidden-editor::after { content:"Hidden"; position:absolute; i
   overflow-x:auto;
   overflow-y:visible;
   scroll-snap-type:none;
-  overscroll-behavior:auto;
+  overscroll-behavior-x:contain;
+  scroll-behavior:auto;
   touch-action:pan-y pinch-zoom;
   -webkit-overflow-scrolling:touch;
   padding:22px 2px 8px;

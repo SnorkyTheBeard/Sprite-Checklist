@@ -632,55 +632,18 @@
       let rowGesture = null;
       let rowGlideFrame = 0;
       let suppressRowClickUntil = 0;
-      const findTouch = (list,id) => {
-        for (let index = 0; index < list.length; index += 1) if (list[index].identifier === id) return list[index];
-        return null;
-      };
-      row.addEventListener('touchstart', (event) => {
-        if (event.touches.length !== 1) return;
-        const stoppedActiveGlide = Boolean(rowGlideFrame);
-        if (stoppedActiveGlide) {
-          cancelAnimationFrame(rowGlideFrame);
-          suppressRowClickUntil = Date.now() + 450;
-        }
-        rowGlideFrame = 0;
-        row.classList.remove('is-touch-dragging');
-        const touch = event.touches[0];
-        rowGesture = { id:touch.identifier, x:touch.clientX, y:touch.clientY, lastX:touch.clientX, lastTime:performance.now(), velocity:0, horizontal:false, stoppedActiveGlide };
-      }, { passive:true });
-      row.addEventListener('touchmove', (event) => {
-        if (!rowGesture) return;
-        const touch = findTouch(event.touches,rowGesture.id);
-        if (!touch) return;
-        const dx = touch.clientX - rowGesture.x;
-        const dy = touch.clientY - rowGesture.y;
-        if (!rowGesture.horizontal) {
-          if (Math.abs(dy) > 7 && Math.abs(dy) >= Math.abs(dx)) {
-            rowGesture = null;
-            return;
-          }
-          if (Math.abs(dx) < 7 || Math.abs(dx) <= Math.abs(dy)) return;
-          rowGesture.horizontal = true;
-          row.classList.add('is-touch-dragging');
-        }
-        event.preventDefault();
-        const now = performance.now();
-        const elapsed = Math.max(1,now - rowGesture.lastTime);
-        const movement = touch.clientX - rowGesture.lastX;
-        const instantVelocity = Math.max(-1.4,Math.min(1.4,-movement / elapsed));
-        rowGesture.velocity = rowGesture.velocity * .58 + instantVelocity * .42;
-        row.scrollLeft -= movement;
-        rowGesture.lastX = touch.clientX;
-        rowGesture.lastTime = now;
-      }, { passive:false });
       const stopRowGlide = () => {
+        if (rowGlideFrame) cancelAnimationFrame(rowGlideFrame);
         rowGlideFrame = 0;
         row.classList.remove('is-touch-dragging');
       };
       const glideRow = (startingVelocity) => {
-        if (Math.abs(startingVelocity) < .06 || matchMedia('(prefers-reduced-motion: reduce)').matches) return stopRowGlide();
-        const speed = Math.min(.62,Math.max(.18,Math.abs(startingVelocity) * .46));
-        const velocity = Math.sign(startingVelocity) * speed;
+        const releaseSpeed = Math.abs(startingVelocity);
+        if (releaseSpeed < .05 || matchMedia('(prefers-reduced-motion: reduce)').matches) return stopRowGlide();
+        const direction = Math.sign(startingVelocity);
+        const cruiseVelocity = direction * Math.min(.5,Math.max(.16,releaseSpeed * .36));
+        let velocity = direction * Math.min(.62,Math.max(Math.abs(cruiseVelocity),releaseSpeed * .62));
+        let position = row.scrollLeft;
         row.classList.add('is-touch-dragging');
         let previous = performance.now();
         const step = (now) => {
@@ -688,7 +651,9 @@
           previous = now;
           const before = row.scrollLeft;
           const maxScroll = Math.max(0,row.scrollWidth - row.clientWidth);
-          row.scrollLeft = Math.max(0,Math.min(maxScroll,before + velocity * elapsed));
+          velocity += (cruiseVelocity - velocity) * Math.min(1,elapsed / 180);
+          position = Math.max(0,Math.min(maxScroll,position + velocity * elapsed));
+          row.scrollLeft = position;
           const reachedStart = velocity < 0 && row.scrollLeft <= .5;
           const reachedEnd = velocity > 0 && row.scrollLeft >= maxScroll - .5;
           if (reachedStart || reachedEnd || Math.abs(row.scrollLeft - before) < .05) stopRowGlide();
@@ -696,20 +661,86 @@
         };
         rowGlideFrame = requestAnimationFrame(step);
       };
-      const endRowGesture = (event) => {
-        if (!rowGesture || !findTouch(event.changedTouches,rowGesture.id)) return;
-        if (rowGesture.horizontal) {
-          suppressRowClickUntil = Date.now() + 450;
-          glideRow(rowGesture.velocity);
-        } else row.classList.remove('is-touch-dragging');
-        rowGesture = null;
-      };
-      row.addEventListener('touchend',endRowGesture,{ passive:true });
-      row.addEventListener('touchcancel', (event) => {
-        if (!rowGesture || !findTouch(event.changedTouches,rowGesture.id)) return;
-        rowGesture = null;
+      const startRowGesture = (id,x,y) => {
+        const stoppedActiveGlide = Boolean(rowGlideFrame);
+        if (stoppedActiveGlide) suppressRowClickUntil = Date.now() + 500;
         stopRowGlide();
-      }, { passive:true });
+        rowGesture = { id, x, y, lastX:x, lastTime:performance.now(), velocity:0, horizontal:false };
+      };
+      const moveRowGesture = (id,x,y,event,capturePointer) => {
+        if (!rowGesture || rowGesture.id !== id) return;
+        const dx = x - rowGesture.x;
+        const dy = y - rowGesture.y;
+        const horizontalDistance = Math.abs(dx);
+        const verticalDistance = Math.abs(dy);
+        if (!rowGesture.horizontal) {
+          if (horizontalDistance >= 5 && horizontalDistance > verticalDistance * 1.05) {
+            rowGesture.horizontal = true;
+            row.classList.add('is-touch-dragging');
+            capturePointer?.();
+          } else {
+            if (verticalDistance >= 14 && verticalDistance > horizontalDistance * 1.25) rowGesture = null;
+            return;
+          }
+        }
+        if (event.cancelable) event.preventDefault();
+        const now = performance.now();
+        const elapsed = Math.max(1,now - rowGesture.lastTime);
+        const movement = x - rowGesture.lastX;
+        const instantVelocity = Math.max(-1.25,Math.min(1.25,-movement / elapsed));
+        const sampleWeight = Math.min(.55,Math.max(.28,elapsed / 36));
+        rowGesture.velocity = rowGesture.velocity * (1 - sampleWeight) + instantVelocity * sampleWeight;
+        row.scrollLeft -= movement;
+        rowGesture.lastX = x;
+        rowGesture.lastTime = now;
+      };
+      const endRowGesture = (id,cancelled = false) => {
+        if (!rowGesture || rowGesture.id !== id) return;
+        const gesture = rowGesture;
+        rowGesture = null;
+        if (gesture.horizontal && !cancelled) {
+          suppressRowClickUntil = Date.now() + 450;
+          glideRow(gesture.velocity);
+        } else row.classList.remove('is-touch-dragging');
+      };
+      if (window.PointerEvent) {
+        row.addEventListener('pointerdown', (event) => {
+          if (event.pointerType === 'mouse' || !event.isPrimary) return;
+          startRowGesture(event.pointerId,event.clientX,event.clientY);
+        });
+        row.addEventListener('pointermove', (event) => {
+          moveRowGesture(event.pointerId,event.clientX,event.clientY,event,() => {
+            try { row.setPointerCapture(event.pointerId); } catch {}
+          });
+        });
+        row.addEventListener('pointerup', (event) => endRowGesture(event.pointerId));
+        row.addEventListener('pointercancel', (event) => endRowGesture(event.pointerId,true));
+      } else {
+        const findTouch = (list,id) => {
+          for (let index = 0; index < list.length; index += 1) if (list[index].identifier === id) return list[index];
+          return null;
+        };
+        row.addEventListener('touchstart', (event) => {
+          if (event.touches.length !== 1) return;
+          const touch = event.touches[0];
+          startRowGesture(touch.identifier,touch.clientX,touch.clientY);
+        }, { passive:true });
+        row.addEventListener('touchmove', (event) => {
+          if (!rowGesture) return;
+          const touch = findTouch(event.touches,rowGesture.id);
+          if (touch) moveRowGesture(touch.identifier,touch.clientX,touch.clientY,event);
+        }, { passive:false });
+        row.addEventListener('touchend', (event) => {
+          if (!rowGesture) return;
+          const touch = findTouch(event.changedTouches,rowGesture.id);
+          if (touch) endRowGesture(touch.identifier);
+        }, { passive:true });
+        row.addEventListener('touchcancel', (event) => {
+          if (!rowGesture) return;
+          const touch = findTouch(event.changedTouches,rowGesture.id);
+          if (touch) endRowGesture(touch.identifier,true);
+        }, { passive:true });
+      }
       row.addEventListener('click', (event) => {
         if (Date.now() < suppressRowClickUntil) {
           event.preventDefault();
