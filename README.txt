@@ -37,6 +37,7 @@ Visual editing
 16. Hidden sprites and groups remain visible in Edit Mode so they can be restored later.
 17. Use Export backup before moving devices or making large changes. Import backup restores the complete design, custom groups and boxes, custom art, fonts, row order, and checklist progress.
 18. Select Save changes whenever you want reassurance that the current design and progress are stored. Individual edits also continue to save automatically.
+19. To publish your finished visual design for everyone, select Download public design. Upload the downloaded published-design.js file to the root of your GitHub repository, replace the older file, and commit the change. GitHub Pages will use it as the default design for every visitor. Collected and Mastered marks remain personal to each device.
 
 Notes
 - Mastering a sprite also marks it collected.

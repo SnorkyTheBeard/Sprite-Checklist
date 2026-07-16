@@ -45,6 +45,7 @@
         <button id="importBtn" type="button">Import backup</button>
         <button id="resetDesignBtn" type="button">Reset design</button>
         <button id="saveChangesBtn" class="save-edit-btn" type="button">Save changes</button>
+        <button id="publishDesignBtn" class="publish-edit-btn" type="button">Download public design</button>
         <input id="importFile" class="visually-hidden" type="file" accept="application/json,.json">
       </div>
     </section>
@@ -321,6 +322,7 @@
   <div id="statusToast" class="status-toast" role="status" aria-live="polite"></div>
   <noscript>This checklist needs JavaScript to save and update progress.</noscript>
 
+  <script src="published-design.js"></script>
   <script src="data.js"></script>
   <script src="app.js"></script>
 </body>

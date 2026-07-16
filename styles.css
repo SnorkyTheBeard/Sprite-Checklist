@@ -128,6 +128,7 @@ h1 { margin:6px 0 8px; font-family:var(--font-heading); font-size:clamp(28px,8vw
 .editor-dock { display:flex; align-items:center; gap:8px; margin:10px 0 -1px; }
 .editor-dock button,.edit-chip,.inline-actions button { min-height:42px; padding:8px 12px; border:1px solid rgba(255,255,255,.2); border-radius:12px; color:#fff; background:rgba(22,22,66,.94); font-weight:900; cursor:pointer; }
 .editor-dock .save-edit-btn { color:#10142b; border-color:#a8efff; background:linear-gradient(180deg,#91e9ff,#7f8cff); }
+.editor-dock .publish-edit-btn { color:#241700; border-color:#ffe398; background:linear-gradient(180deg,#ffe996,#ffbf45); }
 .edit-mode-btn { flex:none; }
 .edit-mode-btn[aria-pressed="true"] { color:#11132f; border-color:#9be8ff; background:linear-gradient(180deg,#91e9ff,#7f8cff); }
 .editor-tools { gap:7px; overflow-x:auto; padding:2px 1px; scrollbar-width:none; }
