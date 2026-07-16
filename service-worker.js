@@ -1,4 +1,4 @@
-const CACHE = 'galaxy-sprite-checklist-v11';
+const CACHE = 'galaxy-sprite-checklist-v13';
 const CORE = [
   './',
   './index.html',

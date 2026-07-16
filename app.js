@@ -896,8 +896,17 @@
 
   document.getElementById('editModeBtn').addEventListener('click', () => {
     editMode = !editMode;
+    if (!editMode) {
+      document.getElementById('editorTools').hidden = true;
+      document.getElementById('editorMenuBtn').setAttribute('aria-expanded','false');
+    }
     renderAll();
     showToast(editMode ? 'Edit Mode on' : 'Editing finished');
+  });
+  document.getElementById('editorMenuBtn').addEventListener('click', () => {
+    const tools = document.getElementById('editorTools');
+    tools.hidden = !tools.hidden;
+    document.getElementById('editorMenuBtn').setAttribute('aria-expanded',String(!tools.hidden));
   });
   document.getElementById('editHeaderBtn').addEventListener('click', openHeaderEditor);
   document.getElementById('editPageBtn').addEventListener('click', openPageEditor);

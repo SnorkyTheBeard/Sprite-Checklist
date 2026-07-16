@@ -129,11 +129,15 @@ h1 { margin:6px 0 8px; font-family:var(--font-heading); font-size:clamp(28px,8vw
 .editor-dock button,.edit-chip,.inline-actions button { min-height:42px; padding:8px 12px; border:1px solid rgba(255,255,255,.2); border-radius:12px; color:#fff; background:rgba(22,22,66,.94); font-weight:900; cursor:pointer; }
 .editor-dock .save-edit-btn { color:#10142b; border-color:#a8efff; background:linear-gradient(180deg,#91e9ff,#7f8cff); }
 .editor-dock .publish-edit-btn { color:#241700; border-color:#ffe398; background:linear-gradient(180deg,#ffe996,#ffbf45); }
-.edit-mode-btn { flex:none; }
+.edit-mode-btn { width:100%; flex:none; }
 .edit-mode-btn[aria-pressed="true"] { color:#11132f; border-color:#9be8ff; background:linear-gradient(180deg,#91e9ff,#7f8cff); }
-.editor-tools { width:100%; flex:1 1 100%; flex-wrap:wrap; gap:7px; padding:2px 1px; }
-.editor-tools button { min-width:0; flex:1 1 145px; white-space:normal; }
-.editor-tools .save-edit-btn,.editor-tools .publish-edit-btn { flex-basis:220px; }
+.editor-menu { width:100%; min-width:0; flex-direction:column; gap:7px; }
+.editor-menu-btn { width:100%; display:flex; align-items:center; justify-content:space-between; }
+.editor-menu-btn span { font-size:18px; transition:transform .18s ease; }
+.editor-menu-btn[aria-expanded="true"] span { transform:rotate(180deg); }
+.editor-tools { width:100%; min-width:0; display:grid; grid-template-columns:minmax(0,1fr); gap:7px; padding:2px 0; }
+.editor-tools[hidden] { display:none!important; }
+.editor-tools button { width:100%; min-width:0; white-space:normal; overflow-wrap:anywhere; }
 .is-hidden-editor { position:relative; }
 body.edit-mode .collection,body.edit-mode .card { outline:2px dashed rgba(87,78,139,.28); outline-offset:-6px; }
 body.edit-mode .is-hidden-editor { opacity:.48; filter:saturate(.45); }
@@ -206,10 +210,11 @@ body.edit-mode .is-hidden-editor::after { content:"Hidden"; position:absolute; i
   gap:10px;
   overflow-x:auto;
   overflow-y:visible;
-  scroll-snap-type:x mandatory;
+  scroll-snap-type:x proximity;
   scroll-padding-inline:2px;
-  overscroll-behavior-x:contain;
-  touch-action:pan-x;
+  overscroll-behavior:auto;
+  touch-action:pan-x pan-y pinch-zoom;
+  -webkit-overflow-scrolling:touch;
   padding:22px 2px 8px;
   scrollbar-width:none;
 }
