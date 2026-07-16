@@ -167,7 +167,7 @@
       scheduleCloudSync();
       return true;
     } catch {
-      showToast('That image is too large to save. Try a smaller image.');
+      showSaveFailure('This design could not be saved because the browser is out of storage. Remove an unused image or try a smaller one.');
       return false;
     }
   }
@@ -823,7 +823,98 @@
     clearTimeout(toastTimer);
     statusToast.textContent = message;
     statusToast.classList.add('show');
-    toastTimer = setTimeout(() => statusToast.classList.remove('show'), 1800);
+    toastTimer = setTimeout(() => statusToast.classList.remove('show'), 2400);
+  }
+
+  function editorStatusElement(form) {
+    let status = form?.querySelector('[data-editor-save-status]');
+    if (!status && form) {
+      status = document.createElement('p');
+      status.className = 'editor-save-status';
+      status.dataset.editorSaveStatus = '';
+      status.setAttribute('role','status');
+      status.setAttribute('aria-live','polite');
+      const actions = form.querySelector('.dialog-actions:last-of-type');
+      (actions?.parentElement || form).insertBefore(status,actions || null);
+    }
+    return status;
+  }
+
+  function setEditorStatus(form, message = '', stateName = '') {
+    const status = editorStatusElement(form);
+    if (!status) return;
+    status.textContent = message;
+    status.classList.toggle('is-working',stateName === 'working');
+    status.classList.toggle('is-ready',stateName === 'ready');
+    status.classList.toggle('is-error',stateName === 'error');
+  }
+
+  function resetEditorStatus(form) {
+    if (!form) return;
+    form.dataset.imageJobs = '0';
+    form.removeAttribute('aria-busy');
+    form.querySelectorAll('button').forEach((button) => {
+      if (button.dataset.processingDisabled === 'yes') button.disabled = false;
+      delete button.dataset.processingDisabled;
+    });
+    setEditorStatus(form);
+  }
+
+  function setEditorProcessing(form, delta, label) {
+    if (!form) return 0;
+    const count = Math.max(0,Number(form.dataset.imageJobs || 0) + delta);
+    form.dataset.imageJobs = String(count);
+    form.toggleAttribute('aria-busy',count > 0);
+    form.querySelectorAll('button[type="submit"],[data-close-dialog]').forEach((button) => {
+      if (count > 0 && !button.disabled) {
+        button.disabled = true;
+        button.dataset.processingDisabled = 'yes';
+      } else if (!count && button.dataset.processingDisabled === 'yes') {
+        button.disabled = false;
+        delete button.dataset.processingDisabled;
+      }
+    });
+    if (count > 0) setEditorStatus(form,`${label} is being resized and optimized…`,'working');
+    return count;
+  }
+
+  async function processEditorImage(input, label, processor) {
+    const file = input.files?.[0];
+    if (!file) return false;
+    const form = input.closest('form');
+    setEditorProcessing(form,1,label);
+    input.disabled = true;
+    try {
+      await processor(file);
+      const saveLabel = form?.querySelector('button[type="submit"]')?.textContent.trim() || 'Save changes';
+      setEditorStatus(form,`${label} is ready. Tap ${saveLabel} to finish.`,'ready');
+      return true;
+    } catch {
+      setEditorStatus(form,`${label} could not be prepared. Try a PNG, JPG, or WebP image.`,'error');
+      return false;
+    } finally {
+      input.disabled = false;
+      setEditorProcessing(form,-1,label);
+    }
+  }
+
+  function editorReadyToSave(form) {
+    if (!Number(form?.dataset.imageJobs || 0)) return true;
+    setEditorStatus(form,'Please wait until the image finishes processing.','working');
+    return false;
+  }
+
+  function showSaveFailure(message) {
+    const openDialogs = [...document.querySelectorAll('dialog[open]')];
+    const activeForm = openDialogs[openDialogs.length - 1]?.querySelector('form');
+    if (activeForm) setEditorStatus(activeForm,message,'error');
+    else showToast(message);
+  }
+
+  function finishEditorSave(dialogId, message) {
+    document.getElementById(dialogId).close();
+    renderAll();
+    requestAnimationFrame(() => showToast(message));
   }
 
   const STUDIO_FIELD_MAP = {
@@ -905,6 +996,7 @@
     studioDraft = cloneJson(design.theme);
     studioCommitted = false;
     fillStudioFields();
+    resetEditorStatus(document.getElementById('designStudioForm'));
     document.getElementById('designStudioDialog').showModal();
   }
 
@@ -949,6 +1041,7 @@
     document.getElementById('editHeaderOpacityOutput').textContent = `${design.theme.headerOpacity}%`;
     document.getElementById('editHeaderHeightOutput').textContent = design.theme.headerHeight ? `${design.theme.headerHeight}px` : 'Auto';
     updateHeaderImagePreview();
+    resetEditorStatus(document.getElementById('headerEditorForm'));
     document.getElementById('headerEditorDialog').showModal();
   }
 
@@ -963,6 +1056,7 @@
     document.getElementById('editPageBgColor').value = background.color;
     document.getElementById('editPageBgMode').value = background.mode;
     document.getElementById('editPageBgFile').value = '';
+    resetEditorStatus(document.getElementById('pageEditorForm'));
     document.getElementById('pageEditorDialog').showModal();
   }
 
@@ -979,6 +1073,7 @@
     document.getElementById('editFamilyBgMode').value = view.bgMode;
     document.getElementById('editFamilyBgFile').value = '';
     document.getElementById('editFamilyVisible').checked = view.visible;
+    resetEditorStatus(document.getElementById('familyEditorForm'));
     document.getElementById('familyEditorDialog').showModal();
   }
 
@@ -1000,6 +1095,7 @@
     document.getElementById('editVariantCardMode').value = view.cardMode;
     document.getElementById('editVariantCardFile').value = '';
     setVariantPreview(view.image);
+    resetEditorStatus(document.getElementById('variantEditorForm'));
     document.getElementById('variantEditorDialog').showModal();
   }
 
@@ -1023,14 +1119,34 @@
         image.onerror = reject;
         image.src = url;
       });
-      const maxWidth = typeof bounds === 'number' ? bounds : bounds.width;
-      const maxHeight = typeof bounds === 'number' ? bounds : bounds.height;
-      const scale = Math.min(1,maxWidth / image.naturalWidth,maxHeight / image.naturalHeight);
+      if (!image.naturalWidth || !image.naturalHeight) throw new Error('invalid-image');
+      const settings = typeof bounds === 'number' ? { width:bounds, height:bounds, maxBytes:260000 } : bounds;
+      const maxWidth = settings.width;
+      const maxHeight = settings.height;
+      const targetBytes = settings.maxBytes || 260000;
+      let scale = Math.min(1,maxWidth / image.naturalWidth,maxHeight / image.naturalHeight);
+      let quality = .84;
+      let bestResult = '';
       const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1,Math.round(image.naturalWidth * scale));
-      canvas.height = Math.max(1,Math.round(image.naturalHeight * scale));
-      canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);
-      return canvas.toDataURL('image/webp',.86);
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('canvas-unavailable');
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        canvas.width = Math.max(1,Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1,Math.round(image.naturalHeight * scale));
+        context.clearRect(0,0,canvas.width,canvas.height);
+        context.drawImage(image,0,0,canvas.width,canvas.height);
+        bestResult = canvas.toDataURL('image/webp',quality);
+        const encodedLength = Math.max(0,bestResult.length - bestResult.indexOf(',') - 1);
+        const estimatedBytes = Math.ceil(encodedLength * .75);
+        if (estimatedBytes <= targetBytes) return bestResult;
+        if (quality > .58) quality = Math.max(.58,quality - .13);
+        else {
+          const shrink = Math.max(.68,Math.min(.88,Math.sqrt(targetBytes / estimatedBytes) * .94));
+          scale *= shrink;
+          quality = .72;
+        }
+      }
+      return bestResult;
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -1038,19 +1154,19 @@
 
   function artworkBounds(area) {
     const sizes = {
-      bodyBgImage:{ width:1920, height:1440 },
-      headerBgImage:{ width:1600, height:700 },
-      collectionBgImage:{ width:1600, height:900 },
-      cardBgImage:{ width:900, height:1100 },
-      wellBgImage:{ width:900, height:900 },
-      leftArt:{ width:800, height:1800 },
-      rightArt:{ width:800, height:1800 },
-      page:{ width:1920, height:1440 },
-      group:{ width:1600, height:900 },
-      card:{ width:900, height:1100 },
-      sprite:{ width:900, height:900 }
+      bodyBgImage:{ width:1920, height:1440, maxBytes:420000 },
+      headerBgImage:{ width:1600, height:700, maxBytes:300000 },
+      collectionBgImage:{ width:1600, height:900, maxBytes:320000 },
+      cardBgImage:{ width:900, height:1100, maxBytes:220000 },
+      wellBgImage:{ width:900, height:900, maxBytes:220000 },
+      leftArt:{ width:800, height:1800, maxBytes:320000 },
+      rightArt:{ width:800, height:1800, maxBytes:320000 },
+      page:{ width:1920, height:1440, maxBytes:420000 },
+      group:{ width:1600, height:900, maxBytes:320000 },
+      card:{ width:900, height:1100, maxBytes:220000 },
+      sprite:{ width:900, height:900, maxBytes:220000 }
     };
-    return sizes[area] || { width:1200, height:1200 };
+    return sizes[area] || { width:1200, height:1200, maxBytes:260000 };
   }
 
   function isImageFile(file) {
@@ -1417,35 +1533,33 @@
 
   Object.entries(STUDIO_IMAGE_INPUTS).forEach(([id,key]) => {
     document.getElementById(id).addEventListener('change', async (event) => {
-      const file = event.currentTarget.files?.[0];
-      if (!file || !studioDraft) return;
-      try {
-        studioDraft[key] = await resizeImage(file,artworkBounds(key));
+      const input = event.currentTarget;
+      if (!studioDraft) return;
+      await processEditorImage(input,'Artwork',async (file) => {
+        const image = await resizeImage(file,artworkBounds(key));
+        if (!studioDraft) throw new Error('editor-closed');
+        studioDraft[key] = image;
         if (key === 'headerBgImage' && !studioDraft.headerHeight) {
           studioDraft.headerHeight = 220;
           document.getElementById('themeHeaderHeight').value = '220';
         }
         previewStudioDraft();
-        showToast('Artwork resized and loaded');
-      } catch {
-        alert('That artwork could not be read.');
-      }
+      });
     });
   });
 
   document.getElementById('themePageBgFile').addEventListener('change', async (event) => {
-    const file = event.currentTarget.files?.[0];
-    if (!file || !studioDraft) return;
-    try {
+    const input = event.currentTarget;
+    if (!studioDraft) return;
+    await processEditorImage(input,'Page background',async (file) => {
+      const image = await resizeImage(file,artworkBounds('page'));
+      if (!studioDraft) throw new Error('editor-closed');
       const page = studioDraft.pageBackgrounds[studioPageRarity];
-      page.image = await resizeImage(file,artworkBounds('page'));
+      page.image = image;
       page.enabled = true;
       document.getElementById('themePageBgEnabled').checked = true;
       previewStudioDraft();
-      showToast('Page artwork resized and loaded');
-    } catch {
-      alert('That page artwork could not be read.');
-    }
+    });
   });
 
   document.querySelectorAll('[data-remove-theme-image]').forEach((button) => {
@@ -1453,7 +1567,7 @@
       if (!studioDraft) return;
       studioDraft[button.dataset.removeThemeImage] = '';
       previewStudioDraft();
-      showToast('Artwork removed');
+      setEditorStatus(button.closest('form'),'Artwork will be removed. Tap Apply design to save.','ready');
     });
   });
 
@@ -1461,7 +1575,7 @@
     if (!studioDraft) return;
     studioDraft.pageBackgrounds[studioPageRarity].image = '';
     previewStudioDraft();
-    showToast('Page artwork removed');
+    setEditorStatus(document.getElementById('designStudioForm'),'Page artwork will be removed. Tap Apply design to save.','ready');
   });
 
   document.getElementById('themeCustomFontFile').addEventListener('change', async (event) => {
@@ -1497,12 +1611,11 @@
 
   document.getElementById('designStudioForm').addEventListener('submit', (event) => {
     event.preventDefault();
+    if (!editorReadyToSave(event.currentTarget)) return;
     design.theme = studioDraft;
     if (!saveDesign()) return;
     studioCommitted = true;
-    document.getElementById('designStudioDialog').close();
-    renderAll();
-    showToast('Design applied');
+    finishEditorSave('designStudioDialog','Design changes saved');
   });
 
   document.getElementById('designStudioDialog').addEventListener('close', () => {
@@ -1515,25 +1628,21 @@
   });
 
   document.getElementById('editHeaderBgFile').addEventListener('change', async (event) => {
-    const file = event.currentTarget.files?.[0];
-    if (!file) return;
-    try {
+    const input = event.currentTarget;
+    await processEditorImage(input,'Header image',async (file) => {
       pendingHeaderBgImage = await resizeImage(file,artworkBounds('headerBgImage'));
       if (!Number(document.getElementById('editHeaderHeight').value)) {
         document.getElementById('editHeaderHeight').value = '220';
         document.getElementById('editHeaderHeightOutput').textContent = '220px';
       }
       updateHeaderImagePreview();
-      showToast('Header image resized and loaded');
-    } catch {
-      alert('That header image could not be read.');
-    }
+    });
   });
   document.getElementById('removeEditHeaderBgBtn').addEventListener('click', () => {
     pendingHeaderBgImage = '';
     document.getElementById('editHeaderBgFile').value = '';
     updateHeaderImagePreview();
-    showToast('Header image removed');
+    setEditorStatus(document.getElementById('headerEditorForm'),'Header image will be removed. Tap Save header to finish.','ready');
   });
   document.getElementById('editHeaderBgMode').addEventListener('input',updateHeaderImagePreview);
   document.getElementById('editHeaderRadius').addEventListener('input', (event) => {
@@ -1548,6 +1657,7 @@
 
   document.getElementById('headerEditorForm').addEventListener('submit', (event) => {
     event.preventDefault();
+    if (!editorReadyToSave(event.currentTarget)) return;
     design.header = {
       kicker:document.getElementById('editKicker').value,
       title:document.getElementById('editTitle').value,
@@ -1567,27 +1677,24 @@
     design.theme.headerHeight = Number(document.getElementById('editHeaderHeight').value);
     if (pendingHeaderBgImage !== undefined) design.theme.headerBgImage = pendingHeaderBgImage;
     if (!saveDesign()) return;
-    document.getElementById('headerEditorDialog').close();
-    renderAll();
-    showToast('Header updated');
+    finishEditorSave('headerEditorDialog','Header changes saved');
   });
 
   document.getElementById('editPageBgFile').addEventListener('change', async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
+    const input = event.currentTarget;
+    await processEditorImage(input,'Page background',async (file) => {
       pendingPageBgImage = await resizeImage(file,artworkBounds('page'));
       document.getElementById('editPageBgEnabled').checked = true;
-      showToast('Page background resized and loaded');
-    } catch { alert('That page background could not be read.'); }
+    });
   });
   document.getElementById('removeEditPageBgBtn').addEventListener('click', () => {
     pendingPageBgImage = '';
-    showToast('Page background image removed');
+    setEditorStatus(document.getElementById('pageEditorForm'),'Page background will be removed. Tap Save changes to finish.','ready');
   });
 
   document.getElementById('pageEditorForm').addEventListener('submit', (event) => {
     event.preventDefault();
+    if (!editorReadyToSave(event.currentTarget)) return;
     design.pages[activeRarity] = {
       eyebrow:document.getElementById('editPageEyebrow').value,
       title:document.getElementById('editPageTitle').value,
@@ -1599,33 +1706,30 @@
     pageBackground.mode = document.getElementById('editPageBgMode').value;
     if (pendingPageBgImage !== undefined) pageBackground.image = pendingPageBgImage;
     if (!saveDesign()) return;
-    document.getElementById('pageEditorDialog').close();
-    renderAll();
-    showToast(`${design.pages[activeRarity].title || activeRarity} page changes saved`);
+    finishEditorSave('pageEditorDialog',`${design.pages[activeRarity].title || activeRarity} page changes saved`);
   });
 
   document.getElementById('editFamilyBgFile').addEventListener('change', async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
+    const input = event.currentTarget;
+    await processEditorImage(input,'Group background',async (file) => {
       pendingFamilyBgImage = await resizeImage(file,artworkBounds('group'));
       document.getElementById('editFamilyCustomBg').checked = true;
-      showToast('Group background resized and loaded');
-    } catch { alert('That group background could not be read.'); }
+    });
   });
   document.getElementById('removeFamilyBgBtn').addEventListener('click', () => {
     pendingFamilyBgImage = '';
     document.getElementById('editFamilyCustomBg').checked = true;
-    showToast('Group background image removed');
+    setEditorStatus(document.getElementById('familyEditorForm'),'Group background will be removed. Tap Save changes to finish.','ready');
   });
   document.getElementById('restoreFamilyBgBtn').addEventListener('click', () => {
     pendingFamilyBgImage = undefined;
     document.getElementById('editFamilyCustomBg').checked = false;
-    showToast('Main group-box design selected');
+    setEditorStatus(document.getElementById('familyEditorForm'),'Main group-box design selected. Tap Save changes to finish.','ready');
   });
 
   document.getElementById('familyEditorForm').addEventListener('submit', (event) => {
     event.preventDefault();
+    if (!editorReadyToSave(event.currentTarget)) return;
     const id = document.getElementById('editFamilyId').value;
     const custom = familyCustom(id);
     custom.name = document.getElementById('editFamilyName').value;
@@ -1636,9 +1740,7 @@
     custom.bgMode = document.getElementById('editFamilyBgMode').value;
     if (pendingFamilyBgImage !== undefined) custom.bgImage = pendingFamilyBgImage;
     if (!saveDesign()) return;
-    document.getElementById('familyEditorDialog').close();
-    renderAll();
-    showToast(`${custom.name || 'Sprite group'} changes saved`);
+    finishEditorSave('familyEditorDialog',`${custom.name || 'Sprite group'} changes saved`);
   });
 
   document.getElementById('deleteFamilyBtn').addEventListener('click', () => {
@@ -1684,38 +1786,38 @@
   });
 
   document.getElementById('editVariantImage').addEventListener('change', async (event) => {
-    const file = event.target.files?.[0];
+    const input = event.currentTarget;
+    const file = input.files?.[0];
     if (!file) return;
     previewObjectUrl = URL.createObjectURL(file);
     setVariantPreview(previewObjectUrl);
-    try {
-      pendingVariantImage = await resizeImage(file,artworkBounds('sprite'));
+    const prepared = await processEditorImage(input,'Sprite image',async (selectedFile) => {
+      pendingVariantImage = await resizeImage(selectedFile,artworkBounds('sprite'));
       setVariantPreview(pendingVariantImage);
       clearPreviewObjectUrl();
-    } catch {
-      alert('That image could not be read.');
+    });
+    if (!prepared) {
       pendingVariantImage = undefined;
+      clearPreviewObjectUrl();
     }
   });
 
   document.getElementById('editVariantCardFile').addEventListener('change', async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
+    const input = event.currentTarget;
+    await processEditorImage(input,'Card background',async (file) => {
       pendingVariantCardImage = await resizeImage(file,artworkBounds('card'));
       document.getElementById('editVariantCustomCard').checked = true;
-      showToast('Card background resized and loaded');
-    } catch { alert('That card background could not be read.'); }
+    });
   });
   document.getElementById('removeVariantCardBgBtn').addEventListener('click', () => {
     pendingVariantCardImage = '';
     document.getElementById('editVariantCustomCard').checked = true;
-    showToast('Card background image removed');
+    setEditorStatus(document.getElementById('variantEditorForm'),'Card background will be removed. Tap Save changes to finish.','ready');
   });
   document.getElementById('restoreVariantCardBgBtn').addEventListener('click', () => {
     pendingVariantCardImage = undefined;
     document.getElementById('editVariantCustomCard').checked = false;
-    showToast('Main card design selected');
+    setEditorStatus(document.getElementById('variantEditorForm'),'Main card design selected. Tap Save changes to finish.','ready');
   });
 
   document.getElementById('removeVariantImageBtn').addEventListener('click', () => {
@@ -1778,6 +1880,7 @@
 
   document.getElementById('variantEditorForm').addEventListener('submit', (event) => {
     event.preventDefault();
+    if (!editorReadyToSave(event.currentTarget)) return;
     const familyId = document.getElementById('editVariantFamilyId').value;
     const variantId = document.getElementById('editVariantId').value;
     const custom = familyCustom(familyId);
@@ -1790,10 +1893,8 @@
     if (pendingVariantCardImage !== undefined) custom.variants[variantId].cardImage = pendingVariantCardImage;
     if (pendingVariantImage !== undefined) custom.variants[variantId].image = pendingVariantImage;
     if (!saveDesign()) return;
-    document.getElementById('variantEditorDialog').close();
     clearPreviewObjectUrl();
-    renderAll();
-    showToast(`${custom.variants[variantId].name || 'Sprite'} changes saved`);
+    finishEditorSave('variantEditorDialog',`${custom.variants[variantId].name || 'Sprite'} changes saved`);
   });
 
   document.querySelectorAll('[data-close-dialog]').forEach((button) => {
