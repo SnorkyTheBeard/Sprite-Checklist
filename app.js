@@ -4,6 +4,7 @@
   const PROGRESS_KEY = 'galaxy_sprite_tracker_progress_v1';
   const DESIGN_KEY = 'galaxy_sprite_tracker_design_v1';
   const OWNER_UNLOCK_KEY = 'galaxy_sprite_tracker_owner_unlocked_v1';
+  const CLOUD_SYNC_KEY = 'galaxy_sprite_tracker_cloud_sync_v1';
   const OWNER_KEY_HASH = '1b5b7aba986560cfabe2c05862867822f83970debec9b8bd17afa1e52f779caa';
   const REORDER_MIME = 'application/x-sprite-variant-order';
   const baseData = Array.isArray(window.SPRITE_DATA) ? window.SPRITE_DATA : [];
@@ -31,7 +32,7 @@
     system:{ label:'System / clean', css:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif' },
     rounded:{ label:'Rounded', css:'"Trebuchet MS","Arial Rounded MT Bold",Arial,sans-serif' },
     storybook:{ label:'Storybook serif', css:'Georgia,"Times New Roman",serif' },
-    playful:{ label:'Playful', css:'"Comic Sans MS","Trebuchet MS",cursive' },
+    playful:{ label:'Playful', css:'"Sprite Playful","Trebuchet MS",cursive' },
     bold:{ label:'Bold display', css:'Impact,"Arial Black",sans-serif' },
     mono:{ label:'Monospace', css:'"Courier New",monospace' },
     custom:{ label:'My uploaded font', css:'"UserCustomFont",sans-serif' }
@@ -53,6 +54,7 @@
   let activeRarity = rarityFromHash() || defaultRarity;
   let state = loadJson(PROGRESS_KEY, {});
   let design = loadDesign();
+  let cloudSyncSettings = { owner:'SnorkyTheBeard', repo:'Sprite-Checklist', branch:'main', path:'published-design.js', token:'', enabled:false, ...loadJson(CLOUD_SYNC_KEY,{}) };
   let editMode = false;
   let ownerUnlocked = false;
   let toastTimer;
@@ -70,6 +72,10 @@
   let studioOriginal;
   let studioPageRarity;
   let studioCommitted = false;
+  let cloudSyncTimer;
+  let cloudSyncInFlight = false;
+  let cloudSyncQueued = false;
+  let lastPublicDesignCheck = 0;
 
   const tabsEl = document.getElementById('rarityTabs');
   const collectionsEl = document.getElementById('collections');
@@ -89,6 +95,9 @@
   const spriteSearchResults = document.getElementById('spriteSearchResults');
   const spriteSearchStatus = document.getElementById('spriteSearchStatus');
   const clearSpriteSearchBtn = document.getElementById('clearSpriteSearchBtn');
+  const cloudSyncBtn = document.getElementById('cloudSyncBtn');
+  const cloudSyncStatus = document.getElementById('cloudSyncStatus');
+  const cloudSyncDialogStatus = document.getElementById('cloudSyncDialogStatus');
 
   try { ownerUnlocked = localStorage.getItem(OWNER_UNLOCK_KEY) === 'yes'; } catch {}
 
@@ -147,6 +156,7 @@
     document.getElementById('editModeBtn').hidden = !ownerUnlocked;
     document.getElementById('ownerAccessBtn').hidden = ownerUnlocked;
     if (!ownerUnlocked && editMode) editMode = false;
+    updateCloudSyncUi();
   }
 
   function saveDesign() {
@@ -154,6 +164,7 @@
       design._meta ||= {};
       design._meta.localUpdatedAt = Date.now();
       localStorage.setItem(DESIGN_KEY, JSON.stringify(design));
+      scheduleCloudSync();
       return true;
     } catch {
       showToast('That image is too large to save. Try a smaller image.');
@@ -280,6 +291,16 @@
     return { size:'cover', repeat:'no-repeat' };
   }
 
+  function colorWithOpacity(color,percentage) {
+    const value = String(color || '').trim();
+    const short = value.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i);
+    const full = value.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+    const parts = full ? full.slice(1) : (short ? short.slice(1).map((part) => part + part) : null);
+    if (!parts) return value;
+    const [red,green,blue] = parts.map((part) => parseInt(part,16));
+    return `rgba(${red},${green},${blue},${Math.max(0,Math.min(100,Number(percentage))) / 100})`;
+  }
+
   function applyCustomBackground(element, color, image, mode) {
     element.style.backgroundColor = color;
     element.style.backgroundImage = image ? `url("${image}")` : 'none';
@@ -317,6 +338,7 @@
     root.style.setProperty('--theme-muted',theme.mutedColor);
     root.style.setProperty('--theme-body-bg',theme.bodyBgColor);
     root.style.setProperty('--theme-header-bg',theme.headerBgColor);
+    root.style.setProperty('--theme-header-surface',colorWithOpacity(theme.headerBgColor,theme.headerOpacity));
     root.style.setProperty('--theme-header-text',theme.headerTextColor);
     root.style.setProperty('--theme-header-border',theme.headerBorderColor);
     root.style.setProperty('--theme-header-radius',`${theme.headerRadius}px`);
@@ -629,124 +651,6 @@
         document.getElementById('addVariantDialog').showModal();
       });
       const row = section.querySelector('.variant-row');
-      let rowGesture = null;
-      let rowGlideFrame = 0;
-      let suppressRowClickUntil = 0;
-      const stopRowGlide = () => {
-        if (rowGlideFrame) cancelAnimationFrame(rowGlideFrame);
-        rowGlideFrame = 0;
-        row.classList.remove('is-touch-dragging');
-      };
-      const glideRow = (startingVelocity) => {
-        const releaseSpeed = Math.abs(startingVelocity);
-        if (releaseSpeed < .05 || matchMedia('(prefers-reduced-motion: reduce)').matches) return stopRowGlide();
-        const direction = Math.sign(startingVelocity);
-        const cruiseVelocity = direction * Math.min(.5,Math.max(.16,releaseSpeed * .36));
-        let velocity = direction * Math.min(.62,Math.max(Math.abs(cruiseVelocity),releaseSpeed * .62));
-        let position = row.scrollLeft;
-        row.classList.add('is-touch-dragging');
-        let previous = performance.now();
-        const step = (now) => {
-          const elapsed = Math.min(34,Math.max(1,now - previous));
-          previous = now;
-          const before = row.scrollLeft;
-          const maxScroll = Math.max(0,row.scrollWidth - row.clientWidth);
-          velocity += (cruiseVelocity - velocity) * Math.min(1,elapsed / 180);
-          position = Math.max(0,Math.min(maxScroll,position + velocity * elapsed));
-          row.scrollLeft = position;
-          const reachedStart = velocity < 0 && row.scrollLeft <= .5;
-          const reachedEnd = velocity > 0 && row.scrollLeft >= maxScroll - .5;
-          if (reachedStart || reachedEnd || Math.abs(row.scrollLeft - before) < .05) stopRowGlide();
-          else rowGlideFrame = requestAnimationFrame(step);
-        };
-        rowGlideFrame = requestAnimationFrame(step);
-      };
-      const startRowGesture = (id,x,y) => {
-        const stoppedActiveGlide = Boolean(rowGlideFrame);
-        if (stoppedActiveGlide) suppressRowClickUntil = Date.now() + 500;
-        stopRowGlide();
-        rowGesture = { id, x, y, lastX:x, lastTime:performance.now(), velocity:0, horizontal:false };
-      };
-      const moveRowGesture = (id,x,y,event,capturePointer) => {
-        if (!rowGesture || rowGesture.id !== id) return;
-        const dx = x - rowGesture.x;
-        const dy = y - rowGesture.y;
-        const horizontalDistance = Math.abs(dx);
-        const verticalDistance = Math.abs(dy);
-        if (!rowGesture.horizontal) {
-          if (horizontalDistance >= 5 && horizontalDistance > verticalDistance * 1.05) {
-            rowGesture.horizontal = true;
-            row.classList.add('is-touch-dragging');
-            capturePointer?.();
-          } else {
-            if (verticalDistance >= 14 && verticalDistance > horizontalDistance * 1.25) rowGesture = null;
-            return;
-          }
-        }
-        if (event.cancelable) event.preventDefault();
-        const now = performance.now();
-        const elapsed = Math.max(1,now - rowGesture.lastTime);
-        const movement = x - rowGesture.lastX;
-        const instantVelocity = Math.max(-1.25,Math.min(1.25,-movement / elapsed));
-        const sampleWeight = Math.min(.55,Math.max(.28,elapsed / 36));
-        rowGesture.velocity = rowGesture.velocity * (1 - sampleWeight) + instantVelocity * sampleWeight;
-        row.scrollLeft -= movement;
-        rowGesture.lastX = x;
-        rowGesture.lastTime = now;
-      };
-      const endRowGesture = (id,cancelled = false) => {
-        if (!rowGesture || rowGesture.id !== id) return;
-        const gesture = rowGesture;
-        rowGesture = null;
-        if (gesture.horizontal && !cancelled) {
-          suppressRowClickUntil = Date.now() + 450;
-          glideRow(gesture.velocity);
-        } else row.classList.remove('is-touch-dragging');
-      };
-      if (window.PointerEvent) {
-        row.addEventListener('pointerdown', (event) => {
-          if (event.pointerType === 'mouse' || !event.isPrimary) return;
-          startRowGesture(event.pointerId,event.clientX,event.clientY);
-        });
-        row.addEventListener('pointermove', (event) => {
-          moveRowGesture(event.pointerId,event.clientX,event.clientY,event,() => {
-            try { row.setPointerCapture(event.pointerId); } catch {}
-          });
-        });
-        row.addEventListener('pointerup', (event) => endRowGesture(event.pointerId));
-        row.addEventListener('pointercancel', (event) => endRowGesture(event.pointerId,true));
-      } else {
-        const findTouch = (list,id) => {
-          for (let index = 0; index < list.length; index += 1) if (list[index].identifier === id) return list[index];
-          return null;
-        };
-        row.addEventListener('touchstart', (event) => {
-          if (event.touches.length !== 1) return;
-          const touch = event.touches[0];
-          startRowGesture(touch.identifier,touch.clientX,touch.clientY);
-        }, { passive:true });
-        row.addEventListener('touchmove', (event) => {
-          if (!rowGesture) return;
-          const touch = findTouch(event.touches,rowGesture.id);
-          if (touch) moveRowGesture(touch.identifier,touch.clientX,touch.clientY,event);
-        }, { passive:false });
-        row.addEventListener('touchend', (event) => {
-          if (!rowGesture) return;
-          const touch = findTouch(event.changedTouches,rowGesture.id);
-          if (touch) endRowGesture(touch.identifier);
-        }, { passive:true });
-        row.addEventListener('touchcancel', (event) => {
-          if (!rowGesture) return;
-          const touch = findTouch(event.changedTouches,rowGesture.id);
-          if (touch) endRowGesture(touch.identifier,true);
-        }, { passive:true });
-      }
-      row.addEventListener('click', (event) => {
-        if (Date.now() < suppressRowClickUntil) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-      },true);
       orderedVariants(family).forEach((variant) => {
         const view = variantView(family,variant);
         if (view.visible || editMode) row.appendChild(makeCard(family,variant));
@@ -1203,13 +1107,18 @@
     setTimeout(() => URL.revokeObjectURL(url),0);
   }
 
-  function exportPublishedDesign() {
-    if (!saveDesign()) return;
+  function buildPublishedDesignContents(publishedAt = Date.now() + 1) {
     const publicDesign = cloneJson(design);
     publicDesign._meta ||= {};
-    publicDesign._meta.publishedAt = Date.now() + 1;
+    publicDesign._meta.publishedAt = publishedAt;
+    delete publicDesign._meta.localUpdatedAt;
     const safeJson = JSON.stringify(publicDesign).replace(/</g,'\\u003c');
-    publishedDesignContents = `// Generated by Sprite Checklist. Replace this file in your GitHub repository.\nwindow.PUBLISHED_DESIGN = ${safeJson};\n`;
+    return `// Generated by Sprite Checklist. Replace this file in your GitHub repository.\nwindow.PUBLISHED_DESIGN = ${safeJson};\n`;
+  }
+
+  function exportPublishedDesign() {
+    if (!saveDesign()) return;
+    publishedDesignContents = buildPublishedDesignContents();
     publishedDesignFile = new File([publishedDesignContents],'published-design.js',{ type:'text/javascript' });
     if (publishedDesignUrl) URL.revokeObjectURL(publishedDesignUrl);
     publishedDesignUrl = URL.createObjectURL(publishedDesignFile);
@@ -1222,6 +1131,143 @@
     shareButton.hidden = !(navigator.canShare && navigator.canShare({ files:[publishedDesignFile] }));
     document.getElementById('publishDesignDialog').showModal();
     showToast('Public design prepared');
+  }
+
+  function persistCloudSyncSettings() {
+    try { localStorage.setItem(CLOUD_SYNC_KEY,JSON.stringify(cloudSyncSettings)); }
+    catch { showToast('Automatic sync settings could not be saved.'); }
+  }
+
+  function updateCloudSyncUi(message = '',stateName = '') {
+    const connected = Boolean(cloudSyncSettings.enabled && cloudSyncSettings.token);
+    cloudSyncBtn.textContent = `Automatic sync: ${connected ? 'On' : 'Off'}`;
+    cloudSyncStatus.classList.toggle('is-synced',stateName === 'synced' || (connected && !stateName));
+    cloudSyncStatus.classList.toggle('is-error',stateName === 'error');
+    cloudSyncStatus.textContent = message || (connected
+      ? 'Saved design changes publish automatically for every browser.'
+      : 'Design changes are saved only in this browser.');
+  }
+
+  function openCloudSyncDialog() {
+    document.getElementById('syncRepoOwner').value = cloudSyncSettings.owner || 'SnorkyTheBeard';
+    document.getElementById('syncRepoName').value = cloudSyncSettings.repo || 'Sprite-Checklist';
+    document.getElementById('syncRepoBranch').value = cloudSyncSettings.branch || 'main';
+    document.getElementById('syncRepoPath').value = cloudSyncSettings.path || 'published-design.js';
+    document.getElementById('syncGithubToken').value = '';
+    document.getElementById('syncEnabled').checked = cloudSyncSettings.token ? cloudSyncSettings.enabled !== false : true;
+    document.getElementById('syncStoredTokenNote').hidden = !cloudSyncSettings.token;
+    document.getElementById('disconnectCloudSyncBtn').hidden = !cloudSyncSettings.token;
+    cloudSyncDialogStatus.textContent = '';
+    document.getElementById('cloudSyncDialog').showModal();
+  }
+
+  function utf8ToBase64(value) {
+    const bytes = new TextEncoder().encode(value);
+    let binary = '';
+    for (let index = 0; index < bytes.length; index += 32768) binary += String.fromCharCode(...bytes.subarray(index,index + 32768));
+    return btoa(binary);
+  }
+
+  async function githubErrorMessage(response) {
+    try {
+      const payload = await response.json();
+      return payload.message || `GitHub returned ${response.status}`;
+    } catch {
+      return `GitHub returned ${response.status}`;
+    }
+  }
+
+  async function publishDesignToGitHub(settings) {
+    const owner = encodeURIComponent(settings.owner.trim());
+    const repo = encodeURIComponent(settings.repo.trim());
+    const branch = settings.branch.trim();
+    const path = settings.path.trim().split('/').filter(Boolean).map(encodeURIComponent).join('/');
+    const endpoint = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+    const headers = {
+      Accept:'application/vnd.github.object+json',
+      Authorization:`Bearer ${settings.token}`,
+      'X-GitHub-Api-Version':'2022-11-28'
+    };
+    const currentResponse = await fetch(`${endpoint}?ref=${encodeURIComponent(branch)}`,{ headers, cache:'no-store' });
+    let sha = '';
+    if (currentResponse.ok) sha = (await currentResponse.json()).sha || '';
+    else if (currentResponse.status !== 404) throw new Error(await githubErrorMessage(currentResponse));
+
+    const publishedAt = Date.now() + 1;
+    const body = {
+      message:`Publish Sprite Checklist design ${new Date(publishedAt).toISOString()}`,
+      content:utf8ToBase64(buildPublishedDesignContents(publishedAt)),
+      branch
+    };
+    if (sha) body.sha = sha;
+    const updateResponse = await fetch(endpoint,{
+      method:'PUT',
+      headers:{ ...headers, 'Content-Type':'application/json' },
+      body:JSON.stringify(body)
+    });
+    if (!updateResponse.ok) throw new Error(await githubErrorMessage(updateResponse));
+    return { publishedAt, result:await updateResponse.json() };
+  }
+
+  function scheduleCloudSync() {
+    if (!ownerUnlocked || !cloudSyncSettings.enabled || !cloudSyncSettings.token) return;
+    clearTimeout(cloudSyncTimer);
+    updateCloudSyncUi('Change saved locally; preparing automatic publish…');
+    cloudSyncTimer = setTimeout(runCloudSync,1800);
+  }
+
+  async function runCloudSync() {
+    if (!ownerUnlocked || !cloudSyncSettings.enabled || !cloudSyncSettings.token) return;
+    if (cloudSyncInFlight) {
+      cloudSyncQueued = true;
+      return;
+    }
+    cloudSyncInFlight = true;
+    cloudSyncQueued = false;
+    updateCloudSyncUi('Publishing design for every browser…');
+    try {
+      const publication = await publishDesignToGitHub({ ...cloudSyncSettings });
+      cloudSyncSettings.lastPublishedAt = publication.publishedAt;
+      persistCloudSyncSettings();
+      updateCloudSyncUi('Published successfully. Other browsers will update after GitHub Pages deploys.','synced');
+      showToast('Public design synced');
+    } catch (error) {
+      updateCloudSyncUi(`Automatic publish failed: ${error.message}`,'error');
+      showToast('Automatic sync needs attention');
+    } finally {
+      cloudSyncInFlight = false;
+      if (cloudSyncQueued) {
+        cloudSyncQueued = false;
+        clearTimeout(cloudSyncTimer);
+        cloudSyncTimer = setTimeout(runCloudSync,700);
+      }
+    }
+  }
+
+  function parsePublishedDesignText(text) {
+    const marker = text.indexOf('window.PUBLISHED_DESIGN');
+    const start = text.indexOf('{',marker);
+    const end = text.lastIndexOf('}');
+    if (marker < 0 || start < 0 || end <= start) throw new Error('Invalid public design');
+    return JSON.parse(text.slice(start,end + 1));
+  }
+
+  async function checkForPublishedDesignUpdate() {
+    if (document.hidden || Date.now() - lastPublicDesignCheck < 10000) return;
+    lastPublicDesignCheck = Date.now();
+    try {
+      const response = await fetch('./published-design.js',{ cache:'no-cache' });
+      if (!response.ok) return;
+      const remote = parsePublishedDesignText(await response.text());
+      const remoteAt = Number(remote._meta?.publishedAt || 0);
+      const currentAt = Math.max(Number(design._meta?.publishedAt || 0),Number(design._meta?.localUpdatedAt || 0));
+      if (!remoteAt || remoteAt <= currentAt) return;
+      window.PUBLISHED_DESIGN = remote;
+      design = normalizeDesign(remote);
+      try { localStorage.setItem(DESIGN_KEY,JSON.stringify(design)); } catch {}
+      renderAll();
+      showToast('The public design was updated');
+    } catch {}
   }
 
   async function importBackup(file) {
@@ -1300,6 +1346,47 @@
     const designSaved = saveDesign();
     saveProgress();
     if (designSaved) showToast('All changes saved');
+  });
+  cloudSyncBtn.addEventListener('click',openCloudSyncDialog);
+  document.getElementById('cloudSyncForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const tokenInput = document.getElementById('syncGithubToken');
+    const candidate = {
+      owner:document.getElementById('syncRepoOwner').value.trim(),
+      repo:document.getElementById('syncRepoName').value.trim(),
+      branch:document.getElementById('syncRepoBranch').value.trim(),
+      path:document.getElementById('syncRepoPath').value.trim(),
+      token:tokenInput.value.trim() || cloudSyncSettings.token,
+      enabled:document.getElementById('syncEnabled').checked
+    };
+    if (!candidate.token) {
+      cloudSyncDialogStatus.textContent = 'Paste a fine-grained GitHub token first.';
+      return tokenInput.focus();
+    }
+    const button = document.getElementById('connectCloudSyncBtn');
+    button.disabled = true;
+    cloudSyncDialogStatus.textContent = 'Checking the connection and publishing the current design…';
+    try {
+      const publication = await publishDesignToGitHub(candidate);
+      cloudSyncSettings = { ...candidate, lastPublishedAt:publication.publishedAt };
+      persistCloudSyncSettings();
+      updateCloudSyncUi(candidate.enabled ? 'Connected. Future saved changes will publish automatically.' : 'Connected; automatic publishing is paused.','synced');
+      document.getElementById('cloudSyncDialog').close();
+      showToast('Automatic browser sync connected');
+    } catch (error) {
+      cloudSyncDialogStatus.textContent = `Connection failed: ${error.message}`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+  document.getElementById('disconnectCloudSyncBtn').addEventListener('click', () => {
+    if (!confirm('Remove the saved GitHub connection from this browser?')) return;
+    clearTimeout(cloudSyncTimer);
+    cloudSyncSettings = { owner:'SnorkyTheBeard', repo:'Sprite-Checklist', branch:'main', path:'published-design.js', token:'', enabled:false };
+    try { localStorage.removeItem(CLOUD_SYNC_KEY); } catch {}
+    document.getElementById('cloudSyncDialog').close();
+    updateCloudSyncUi('Automatic sync connection removed.');
+    showToast('Automatic sync disconnected');
   });
   document.getElementById('addFamilyBtn').addEventListener('click', () => {
     document.getElementById('newFamilyName').value = '';
@@ -1834,4 +1921,8 @@
   renderAll();
   switchRarity(activeRarity, { historyMode:'replace' });
   if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));
+  setTimeout(checkForPublishedDesignUpdate,7000);
+  setInterval(checkForPublishedDesignUpdate,45000);
+  window.addEventListener('online',checkForPublishedDesignUpdate);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForPublishedDesignUpdate(); });
 })();

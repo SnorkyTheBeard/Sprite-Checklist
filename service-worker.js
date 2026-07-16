@@ -1,4 +1,4 @@
-const CACHE = 'galaxy-sprite-checklist-v23';
+const CACHE = 'galaxy-sprite-checklist-v25';
 const CORE = [
   './',
   './index.html',
@@ -8,6 +8,8 @@ const CORE = [
   './data.js',
   './app.js',
   './manifest.webmanifest',
+  './fonts/comic-neue-regular.woff2',
+  './fonts/comic-neue-bold.woff2',
   './icons/icon-180.png',
   './icons/icon-192.png',
   './icons/icon-512.png'
@@ -31,12 +33,16 @@ self.addEventListener('fetch', (event) => {
   if (new URL(event.request.url).pathname.endsWith('/published-design.js')) {
     event.respondWith(
       caches.open(CACHE).then(async (cache) => {
-        const cached = await cache.match(event.request);
-        const update = fetch(event.request).then((response) => {
-          if (response.ok) cache.put(event.request,response.clone());
+        const cacheKey = new URL(event.request.url);
+        cacheKey.search = '';
+        const cached = await cache.match(cacheKey.toString());
+        try {
+          const response = await fetch(event.request,{ cache:'no-cache' });
+          if (response.ok) cache.put(cacheKey.toString(),response.clone());
           return response;
-        }).catch(() => null);
-        return cached || await update || Response.error();
+        } catch {
+          return cached || Response.error();
+        }
       })
     );
     return;

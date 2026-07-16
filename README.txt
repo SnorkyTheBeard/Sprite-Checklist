@@ -9,6 +9,11 @@ Review build goals
 - Visual Edit Mode for changing or removing text, replacing images, and hiding content.
 - Export and import backups for moving custom designs and progress between devices.
 
+Updating an existing live checklist
+- Replace index.html, styles.css, app.js, and service-worker.js, then add the complete fonts folder. README.txt is optional.
+- Keep the repository's existing published-design.js and published-assets folder so this code update does not overwrite the design that is already live.
+- After GitHub Pages finishes deploying, unlock Owner access, enter Edit Mode, open Automatic sync, and connect the repository once. Future saved design changes will then publish automatically.
+
 Quick review
 1. Open index.html through a local web server or visit the GitHub Pages URL.
 2. Test a sprite image, its Collected button, and its crown.
@@ -37,7 +42,7 @@ Visual editing
 16. Hidden sprites and groups remain visible in Edit Mode so they can be restored later.
 17. Use Export backup before moving devices or making large changes. Import backup restores the complete design, custom groups and boxes, custom art, fonts, row order, and checklist progress.
 18. Select Save changes whenever you want reassurance that the current design and progress are stored. Individual edits also continue to save automatically.
-19. To publish your finished visual design for everyone, select Prepare public design. The publishing screen reports the generated file size and embedded image count. Choose Download published-design.js, or use Share/Save to Files on supported phones. Upload that generated file to the root of your GitHub repository, replace the older file, and commit the change. Do not upload the blank published-design.js from the app ZIP. GitHub Pages will use the generated file as the default design for every visitor. Collected and Mastered marks remain personal to each device.
+19. Automatic browser sync is the preferred publishing path. In Owner mode, open Automatic sync, create and paste a fine-grained GitHub token restricted to the Sprite-Checklist repository with Contents permission set to Read and write, then choose Connect and publish now. The token stays only in that owner browser and is never included in a public design or backup. Every later saved design edit publishes automatically. Prepare public design remains available as the manual fallback.
 20. Edit page now controls a separate color and background image for each rarity page. Edit group controls a separate color and background image for that entire swipeable group box. Edit sprite controls a separate color and background image for that individual card. Each layer can use Cover, Contain, Repeat, or Stretch independently.
 21. On phones, vertical gestures that begin over a sprite are reserved for moving the page. Clearly horizontal gestures move only the sprite row, so you no longer need to find an empty area before scrolling down.
 22. Uploaded artwork is automatically resized and compressed for its destination: wide page and group backgrounds, shorter header art, portrait card backgrounds, square sprite/image-well art, and tall side artwork.
@@ -45,10 +50,13 @@ Visual editing
 24. This one-time optimized update deliberately includes published-design.js and the published-assets folder. Upload both so the current public design can render immediately without parsing a multi-megabyte embedded-image file. Normal future code-only update ZIPs can omit both items to avoid replacing the customized public design.
 25. Editing is hidden behind a private owner key. Owner access remembers an approved browser until Lock owner mode is selected or that browser's site data is cleared. The key is stored only as a one-way hash in the public code; GitHub repository permissions remain the security boundary for changing the live public design.
 26. There is no loading screen. The public design configuration is intentionally small and its background begins downloading immediately.
-27. Sprite rows use mobile pointer tracking with a forgiving horizontal direction lock, so small natural up/down finger drift does not abandon a left/right swipe. Releasing transitions smoothly into a slower continuous glide that keeps moving until you touch that row again or it reaches the beginning/end. Touching a moving row only stops it and does not accidentally select the sprite beneath your finger. Vertical gestures remain available to the page, and reduced-motion devices do not auto-glide.
+27. Sprite rows now use the browser's native touch scrolling and momentum instead of a custom pointer-direction lock. Safari decides the gesture once: vertical swipes over images move the page, while horizontal swipes move the sprite row and coast naturally. This removes the competing pointer capture and forced glide that could make diagonal or slow swipes hesitate.
 28. Use the search bar to find a visible sprite by group, variant, or rarity. Results show the current collection status. Choosing a result opens the correct rarity page, centers and highlights the exact card, and focuses its inventory control; both inventory and crown controls remain available on that card.
 29. Edit header includes a Crown instruction field for replacing or removing “Tap crown to master.”
 30. Edit header also provides a direct header-image upload plus Cover, Contain, Repeat, and Stretch modes, box/text/border colors, corner roundness, opacity, and minimum banner height. Header artwork is automatically resized for a wide 1600 × 700 area before it is saved; the first uploaded image suggests a 220px banner height, while 0 returns to automatic sizing.
+31. Public browsers check for a newer published design while open and whenever the page becomes active or reconnects. After GitHub Pages finishes deploying, the newer design is adopted without affecting each browser's personal Collected and Mastered marks.
+32. Safari compatibility includes a preloaded bundled Playful webfont, opaque fallbacks for newer color functions, WebKit blur support, dynamic viewport sizing, a non-fixed iPhone/iPad background, and stacked editor controls at common iPhone widths. These prevent transparent boxes, mismatched typography, unstable fixed backgrounds, and cramped mobile dialogs that WebKit can otherwise display.
+33. Automatic GitHub publishing requires the separate repository-limited token because the visual Owner key only unlocks local editing controls; it does not and should not contain permission to write to GitHub.
 
 Notes
 - Mastering a sprite also marks it collected.
