@@ -125,15 +125,15 @@ h1 { margin:6px 0 8px; font-family:var(--font-heading); font-size:clamp(28px,8vw
 #collectedBar { background:linear-gradient(90deg,#59c8ff,#8b72ff); }
 #masteredBar { background:linear-gradient(90deg,#f4b82e,#ffe184); }
 
-.editor-dock { display:flex; align-items:center; gap:8px; margin:10px 0 -1px; }
+.editor-dock { display:flex; align-items:flex-start; flex-wrap:wrap; gap:8px; margin:10px 0 -1px; }
 .editor-dock button,.edit-chip,.inline-actions button { min-height:42px; padding:8px 12px; border:1px solid rgba(255,255,255,.2); border-radius:12px; color:#fff; background:rgba(22,22,66,.94); font-weight:900; cursor:pointer; }
 .editor-dock .save-edit-btn { color:#10142b; border-color:#a8efff; background:linear-gradient(180deg,#91e9ff,#7f8cff); }
 .editor-dock .publish-edit-btn { color:#241700; border-color:#ffe398; background:linear-gradient(180deg,#ffe996,#ffbf45); }
 .edit-mode-btn { flex:none; }
 .edit-mode-btn[aria-pressed="true"] { color:#11132f; border-color:#9be8ff; background:linear-gradient(180deg,#91e9ff,#7f8cff); }
-.editor-tools { gap:7px; overflow-x:auto; padding:2px 1px; scrollbar-width:none; }
-.editor-tools::-webkit-scrollbar { display:none; }
-.editor-tools button { flex:none; white-space:nowrap; }
+.editor-tools { width:100%; flex:1 1 100%; flex-wrap:wrap; gap:7px; padding:2px 1px; }
+.editor-tools button { min-width:0; flex:1 1 145px; white-space:normal; }
+.editor-tools .save-edit-btn,.editor-tools .publish-edit-btn { flex-basis:220px; }
 .is-hidden-editor { position:relative; }
 body.edit-mode .collection,body.edit-mode .card { outline:2px dashed rgba(87,78,139,.28); outline-offset:-6px; }
 body.edit-mode .is-hidden-editor { opacity:.48; filter:saturate(.45); }
