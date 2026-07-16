@@ -276,6 +276,7 @@
           <span class="image-fallback">${view.image ? 'Image unavailable' : 'No image'}</span>
           <span class="check-badge" aria-hidden="true">✓</span>
         </button>
+        <span class="drop-hint editor-only" aria-hidden="true">Drop image here</span>
       </div>
       <h4${displayName ? '' : ' hidden'}>${escapeHtml(displayName)}</h4>
       <button class="collect-button" type="button" aria-pressed="false"><span class="box" aria-hidden="true"></span><span>${escapeHtml(design.header.collectedLabel || 'Collected')}</span></button>
@@ -303,6 +304,37 @@
       commitCardChange(card, family, variant, current, current.mastered ? 'Mastered' : 'Mastery removed');
     });
     card.querySelector('.edit-variant-btn').addEventListener('click', () => openVariantEditor(family.id, variant.id));
+
+    const imageWrap = card.querySelector('.image-wrap');
+    imageWrap.addEventListener('dragenter', (event) => {
+      if (!editMode || !hasDroppedImage(event.dataTransfer)) return;
+      event.preventDefault();
+      imageWrap.classList.add('drop-ready');
+    });
+    imageWrap.addEventListener('dragover', (event) => {
+      if (!editMode || !hasDroppedImage(event.dataTransfer)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+      imageWrap.classList.add('drop-ready');
+    });
+    imageWrap.addEventListener('dragleave', (event) => {
+      if (!imageWrap.contains(event.relatedTarget)) imageWrap.classList.remove('drop-ready');
+    });
+    imageWrap.addEventListener('drop', async (event) => {
+      if (!editMode) return;
+      event.preventDefault();
+      event.stopPropagation();
+      imageWrap.classList.remove('drop-ready');
+      imageWrap.classList.add('drop-saving');
+      try {
+        const file = await droppedImageFile(event.dataTransfer);
+        if (!file) throw new Error('no-image');
+        await applyDroppedSpriteImage(family.id,variant.id,file);
+      } catch {
+        imageWrap.classList.remove('drop-saving');
+        showToast('Drop an image file such as PNG, JPG, or WebP.');
+      }
+    });
 
     updateCard(card, current, family, variant);
     return card;
@@ -661,6 +693,43 @@
     }
   }
 
+  function isImageFile(file) {
+    return Boolean(file && (file.type?.startsWith('image/') || /\.(png|jpe?g|webp|gif|avif|bmp)$/i.test(file.name || '')));
+  }
+
+  function hasDroppedImage(dataTransfer) {
+    if (!dataTransfer) return false;
+    if ([...dataTransfer.files].some(isImageFile)) return true;
+    if ([...dataTransfer.items].some((item) => item.kind === 'file' && item.type.startsWith('image/'))) return true;
+    return [...dataTransfer.types].some((type) => ['text/uri-list','text/html'].includes(type));
+  }
+
+  async function droppedImageFile(dataTransfer) {
+    const direct = [...dataTransfer.files].find(isImageFile) || [...dataTransfer.items].map((item) => item.kind === 'file' ? item.getAsFile() : null).find(isImageFile);
+    if (direct) return direct;
+
+    let source = dataTransfer.getData('text/uri-list').split('\n').find((line) => line && !line.startsWith('#')) || '';
+    if (!source) {
+      const html = dataTransfer.getData('text/html');
+      if (html) source = new DOMParser().parseFromString(html,'text/html').querySelector('img')?.src || '';
+    }
+    if (!/^(data:image\/|blob:|https?:\/\/)/i.test(source)) return null;
+    const response = await fetch(source);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    return blob.type.startsWith('image/') ? blob : null;
+  }
+
+  async function applyDroppedSpriteImage(familyId,variantId,file) {
+    const image = await resizeImage(file,900);
+    const custom = familyCustom(familyId);
+    custom.variants[variantId] ||= {};
+    custom.variants[variantId].image = image;
+    if (!saveDesign()) throw new Error('save-failed');
+    renderAll();
+    showToast('Sprite image replaced');
+  }
+
   function exportBackup() {
     const payload = {
       type:'galaxy-sprite-checklist-backup',
@@ -938,6 +1007,16 @@
     const touch = event.touches[0];
     touchStart = { x:touch.clientX, y:touch.clientY };
   }, { passive:true });
+
+  window.addEventListener('dragover', (event) => {
+    if (editMode && hasDroppedImage(event.dataTransfer) && !event.target.closest?.('input[type="file"]')) event.preventDefault();
+  });
+
+  window.addEventListener('drop', (event) => {
+    if (!editMode || !hasDroppedImage(event.dataTransfer) || event.target.closest?.('input[type="file"]')) return;
+    event.preventDefault();
+    showToast('Drop the image directly onto a sprite box.');
+  });
 
   checklistPage.addEventListener('touchend', (event) => {
     if (!touchStart || event.changedTouches.length !== 1) return;

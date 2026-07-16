@@ -232,6 +232,11 @@ body.edit-mode .is-hidden-editor::after { content:"Hidden"; position:absolute; i
 .card.mastered { border-color:var(--gold); box-shadow:0 0 0 2px rgba(255,212,95,.22),0 0 20px rgba(255,193,50,.25); }
 .image-wrap { position:relative; aspect-ratio:1; display:grid; place-items:center; border-radius:16px; background-color:var(--theme-well-bg); background-image:var(--theme-well-image); background-position:center; background-size:var(--theme-well-size,cover); background-repeat:var(--theme-well-repeat,no-repeat); border:1px solid var(--theme-well-border); overflow:hidden; }
 .image-button { width:100%; height:100%; display:grid; place-items:center; border:0; padding:0; border-radius:inherit; background:none; cursor:pointer; }
+.drop-hint { position:absolute; inset:auto 7px 7px; z-index:7; min-height:28px; align-items:center; justify-content:center; padding:5px 8px; border:1px dashed rgba(255,255,255,.8); border-radius:9px; color:#fff; background:rgba(25,21,65,.84); font-size:10px; font-weight:950; text-align:center; pointer-events:none; transition:.16s ease; }
+.image-wrap.drop-ready { outline:4px solid var(--theme-accent); outline-offset:3px; }
+.image-wrap.drop-ready .drop-hint { inset:7px; min-height:0; font-size:14px; background:color-mix(in srgb,var(--theme-accent) 72%,rgba(20,18,58,.92)); }
+.image-wrap.drop-saving .drop-hint { inset:7px; min-height:0; font-size:0; background:rgba(20,18,58,.92); }
+.image-wrap.drop-saving .drop-hint::after { content:"Saving image…"; font-size:13px; }
 .image-wrap img { width:92%; height:92%; object-fit:contain; transition:transform .18s ease,filter .18s ease; }
 .card.collected .image-wrap img { transform:scale(1.035); filter:brightness(1.06); }
 .image-fallback { display:none; padding:12px; color:#68547f; text-align:center; font-weight:900; }

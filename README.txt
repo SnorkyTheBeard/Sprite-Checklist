@@ -27,6 +27,8 @@ Visual editing
 8. Use Edit header, Edit page, Edit group, or Edit sprite directly on the item you want to change.
 9. Leave a text field empty to remove that text.
 10. Sprite images can be replaced from the phone or computer, removed, or restored.
+   On a computer, you can also drag a PNG, JPG, WebP, GIF, or AVIF directly onto any sprite image box while Edit Mode is on. The highlighted box resizes and saves it automatically.
+   The regular image picker remains available for phones and tablets.
 11. Hidden sprites and groups remain visible in Edit Mode so they can be restored later.
 12. Use Export backup before moving devices or making large changes. Import backup restores the complete design, custom art, fonts, and checklist progress.
 
