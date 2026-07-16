@@ -3,6 +3,8 @@
 
   const PROGRESS_KEY = 'galaxy_sprite_tracker_progress_v1';
   const DESIGN_KEY = 'galaxy_sprite_tracker_design_v1';
+  const OWNER_UNLOCK_KEY = 'galaxy_sprite_tracker_owner_unlocked_v1';
+  const OWNER_KEY_HASH = '1b5b7aba986560cfabe2c05862867822f83970debec9b8bd17afa1e52f779caa';
   const REORDER_MIME = 'application/x-sprite-variant-order';
   const baseData = Array.isArray(window.SPRITE_DATA) ? window.SPRITE_DATA : [];
   const rarities = ['Rare','Epic','Legendary','Mythic'].filter((rarity) => baseData.some((family) => family.rarity === rarity));
@@ -51,6 +53,7 @@
   let state = loadJson(PROGRESS_KEY, {});
   let design = loadDesign();
   let editMode = false;
+  let ownerUnlocked = false;
   let toastTimer;
   let touchStart = null;
   let pendingVariantImage;
@@ -79,6 +82,8 @@
   const masteredBarEl = document.getElementById('masteredBar');
   const resetDialog = document.getElementById('resetDialog');
   const statusToast = document.getElementById('statusToast');
+
+  try { ownerUnlocked = localStorage.getItem(OWNER_UNLOCK_KEY) === 'yes'; } catch {}
 
   function loadJson(key, fallback) {
     try {
@@ -123,6 +128,18 @@
   function saveProgress() {
     try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(state)); }
     catch { showToast('Progress could not be saved on this device.'); }
+  }
+
+  async function hashOwnerKey(value) {
+    const bytes = new TextEncoder().encode(value);
+    const digest = await crypto.subtle.digest('SHA-256',bytes);
+    return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2,'0')).join('');
+  }
+
+  function updateOwnerUi() {
+    document.getElementById('editModeBtn').hidden = !ownerUnlocked;
+    document.getElementById('ownerAccessBtn').hidden = ownerUnlocked;
+    if (!ownerUnlocked && editMode) editMode = false;
   }
 
   function saveDesign() {
@@ -602,6 +619,7 @@
       });
       const row = section.querySelector('.variant-row');
       let rowGesture = null;
+      let rowGlideFrame = 0;
       let suppressRowClickUntil = 0;
       const findTouch = (list,id) => {
         for (let index = 0; index < list.length; index += 1) if (list[index].identifier === id) return list[index];
@@ -609,8 +627,11 @@
       };
       row.addEventListener('touchstart', (event) => {
         if (event.touches.length !== 1) return;
+        if (rowGlideFrame) cancelAnimationFrame(rowGlideFrame);
+        rowGlideFrame = 0;
+        row.classList.remove('is-touch-dragging');
         const touch = event.touches[0];
-        rowGesture = { id:touch.identifier, x:touch.clientX, y:touch.clientY, scrollLeft:row.scrollLeft, horizontal:false };
+        rowGesture = { id:touch.identifier, x:touch.clientX, y:touch.clientY, lastX:touch.clientX, lastTime:performance.now(), velocity:0, horizontal:false };
       }, { passive:true });
       row.addEventListener('touchmove', (event) => {
         if (!rowGesture) return;
@@ -628,16 +649,55 @@
           row.classList.add('is-touch-dragging');
         }
         event.preventDefault();
-        row.scrollLeft = rowGesture.scrollLeft - dx;
+        const now = performance.now();
+        const elapsed = Math.max(1,now - rowGesture.lastTime);
+        const movement = touch.clientX - rowGesture.lastX;
+        const instantVelocity = Math.max(-2.8,Math.min(2.8,-movement / elapsed));
+        rowGesture.velocity = rowGesture.velocity * .58 + instantVelocity * .42;
+        row.scrollLeft -= movement;
+        rowGesture.lastX = touch.clientX;
+        rowGesture.lastTime = now;
       }, { passive:false });
+      const settleRow = () => {
+        rowGlideFrame = 0;
+        row.classList.remove('is-touch-dragging');
+        const cards = [...row.querySelectorAll('.card')];
+        if (!cards.length || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        const rowBox = row.getBoundingClientRect();
+        const positions = cards.map((card) => row.scrollLeft + card.getBoundingClientRect().left - rowBox.left - 2);
+        const target = positions.reduce((closest,position) => Math.abs(position - row.scrollLeft) < Math.abs(closest - row.scrollLeft) ? position : closest,positions[0]);
+        row.scrollTo({ left:Math.max(0,target), behavior:'smooth' });
+      };
+      const glideRow = (startingVelocity) => {
+        let velocity = Math.max(-2.8,Math.min(2.8,startingVelocity));
+        if (Math.abs(velocity) < .08 || matchMedia('(prefers-reduced-motion: reduce)').matches) return settleRow();
+        let previous = performance.now();
+        const step = (now) => {
+          const elapsed = Math.min(34,Math.max(1,now - previous));
+          previous = now;
+          const before = row.scrollLeft;
+          row.scrollLeft += velocity * elapsed;
+          if (Math.abs(row.scrollLeft - before) < .1) velocity = 0;
+          velocity *= Math.pow(.94,elapsed / 16.67);
+          if (Math.abs(velocity) > .025) rowGlideFrame = requestAnimationFrame(step);
+          else settleRow();
+        };
+        rowGlideFrame = requestAnimationFrame(step);
+      };
       const endRowGesture = (event) => {
         if (!rowGesture || !findTouch(event.changedTouches,rowGesture.id)) return;
-        if (rowGesture.horizontal) suppressRowClickUntil = Date.now() + 350;
+        if (rowGesture.horizontal) {
+          suppressRowClickUntil = Date.now() + 450;
+          glideRow(rowGesture.velocity);
+        } else row.classList.remove('is-touch-dragging');
         rowGesture = null;
-        row.classList.remove('is-touch-dragging');
       };
       row.addEventListener('touchend',endRowGesture,{ passive:true });
-      row.addEventListener('touchcancel',endRowGesture,{ passive:true });
+      row.addEventListener('touchcancel', (event) => {
+        if (!rowGesture || !findTouch(event.changedTouches,rowGesture.id)) return;
+        rowGesture = null;
+        settleRow();
+      }, { passive:true });
       row.addEventListener('click', (event) => {
         if (Date.now() < suppressRowClickUntil) {
           event.preventDefault();
@@ -677,6 +737,7 @@
   }
 
   function renderAll() {
+    updateOwnerUi();
     applyTheme();
     document.body.classList.toggle('edit-mode', editMode);
     document.getElementById('editModeBtn').setAttribute('aria-pressed', String(editMode));
@@ -1014,6 +1075,7 @@
   }
 
   document.getElementById('editModeBtn').addEventListener('click', () => {
+    if (!ownerUnlocked) return;
     editMode = !editMode;
     if (!editMode) {
       document.getElementById('editorTools').hidden = true;
@@ -1021,6 +1083,36 @@
     }
     renderAll();
     showToast(editMode ? 'Edit Mode on' : 'Editing finished');
+  });
+  document.getElementById('ownerAccessBtn').addEventListener('click', () => {
+    document.getElementById('ownerKeyInput').value = '';
+    document.getElementById('ownerKeyError').hidden = true;
+    document.getElementById('ownerAccessDialog').showModal();
+    setTimeout(() => document.getElementById('ownerKeyInput').focus(),0);
+  });
+  document.getElementById('ownerAccessForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = document.getElementById('ownerKeyInput');
+    const matches = await hashOwnerKey(input.value);
+    if (matches !== OWNER_KEY_HASH) {
+      document.getElementById('ownerKeyError').hidden = false;
+      input.select();
+      return;
+    }
+    ownerUnlocked = true;
+    try { localStorage.setItem(OWNER_UNLOCK_KEY,'yes'); } catch {}
+    document.getElementById('ownerAccessDialog').close();
+    renderAll();
+    showToast('Owner editing unlocked');
+  });
+  document.getElementById('lockOwnerBtn').addEventListener('click', () => {
+    ownerUnlocked = false;
+    editMode = false;
+    try { localStorage.removeItem(OWNER_UNLOCK_KEY); } catch {}
+    document.getElementById('editorTools').hidden = true;
+    document.getElementById('editorMenuBtn').setAttribute('aria-expanded','false');
+    renderAll();
+    showToast('Owner editing locked');
   });
   document.getElementById('editorMenuBtn').addEventListener('click', () => {
     const tools = document.getElementById('editorTools');

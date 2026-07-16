@@ -1,8 +1,10 @@
-const CACHE = 'galaxy-sprite-checklist-v18';
+const CACHE = 'galaxy-sprite-checklist-v20';
 const CORE = [
   './',
   './index.html',
   './styles.css',
+  './published-design.js',
+  './published-assets/theme-body-bg-image.webp',
   './data.js',
   './app.js',
   './manifest.webmanifest',
@@ -25,6 +27,20 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET' || new URL(event.request.url).origin !== self.location.origin) return;
+
+  if (new URL(event.request.url).pathname.endsWith('/published-design.js')) {
+    event.respondWith(
+      caches.open(CACHE).then(async (cache) => {
+        const cached = await cache.match(event.request);
+        const update = fetch(event.request).then((response) => {
+          if (response.ok) cache.put(event.request,response.clone());
+          return response;
+        }).catch(() => null);
+        return cached || await update || Response.error();
+      })
+    );
+    return;
+  }
 
   event.respondWith(
     fetch(event.request)

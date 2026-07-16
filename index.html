@@ -3,13 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#111342">
+  <meta name="theme-color" content="#050505">
   <meta name="description" content="A visually editable Fortnite Sprite checklist with collected and mastered progress.">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Galaxy Sprite Checklist</title>
+  <meta name="apple-mobile-web-app-title" content="Fortnite Sprite Tracker">
+  <title>Fortnite Sprite Tracker</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="preload" as="image" href="published-assets/theme-body-bg-image.webp" fetchpriority="high">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -18,14 +20,14 @@
   <div class="app-shell">
     <header class="hero" id="hero">
       <button class="edit-chip editor-only" id="editHeaderBtn" type="button">Edit header</button>
-      <p class="kicker" id="heroKicker">Fortnite Collection Tracker</p>
-      <h1 id="heroTitle">Galaxy Sprite Checklist</h1>
-      <p class="sub" id="heroSubtitle">Tap a sprite to mark it collected. Tap its crown when it is mastered.</p>
+      <p class="kicker" id="heroKicker" hidden></p>
+      <h1 id="heroTitle">Fortnite Sprite Tracker</h1>
+      <p class="sub" id="heroSubtitle" hidden></p>
 
       <div class="summary" role="group" aria-label="Overall progress">
         <div>
           <strong id="collectedTotal">0 / 0</strong>
-          <span id="collectedLabel">Collected</span>
+          <span id="collectedLabel">In Collection</span>
           <span class="progress-track" aria-hidden="true"><i id="collectedBar"></i></span>
         </div>
         <div>
@@ -37,7 +39,7 @@
     </header>
 
     <section class="editor-dock" aria-label="Visual editor">
-      <button id="editModeBtn" class="edit-mode-btn" type="button" aria-pressed="false">Edit Mode</button>
+      <button id="editModeBtn" class="edit-mode-btn" type="button" aria-pressed="false" hidden>Edit Mode</button>
       <div class="editor-menu editor-only">
         <button id="editorMenuBtn" class="editor-menu-btn" type="button" aria-expanded="false" aria-controls="editorTools">Editing tools <span aria-hidden="true">▾</span></button>
         <div id="editorTools" class="editor-tools" hidden>
@@ -48,6 +50,7 @@
           <button id="exportBtn" type="button">Export backup</button>
           <button id="importBtn" type="button">Import backup</button>
           <button id="resetDesignBtn" type="button">Reset design</button>
+          <button id="lockOwnerBtn" type="button">Lock owner mode</button>
           <input id="importFile" class="visually-hidden" type="file" accept="application/json,.json">
         </div>
       </div>
@@ -58,7 +61,7 @@
     <main id="checklistPage" role="tabpanel" aria-labelledby="activePageTitle">
       <header class="page-head">
         <div>
-          <p class="page-eyebrow" id="pageEyebrow">Checklist page</p>
+          <p class="page-eyebrow" id="pageEyebrow" hidden></p>
           <h2 id="activePageTitle">Rare Sprites</h2>
           <p id="pageDescription">Track every available variant in this rarity.</p>
         </div>
@@ -73,8 +76,9 @@
     </main>
 
     <footer>
-      <p id="footerNote">Progress is saved on this device.</p>
+      <p id="footerNote">All Progress Saves Locally</p>
       <button id="resetBtn" class="reset-btn" type="button">Reset all progress</button>
+      <button id="ownerAccessBtn" class="owner-access-btn" type="button">Owner access</button>
     </footer>
   </div>
 
@@ -345,6 +349,18 @@
       <p class="field-help">After saving the file, upload it to the root of your GitHub repository and replace the existing published-design.js. Do not upload the blank file from the app ZIP.</p>
       <div class="dialog-actions"><button class="primary-btn" type="button" data-close-dialog>Done</button></div>
     </div>
+  </dialog>
+
+  <dialog id="ownerAccessDialog" class="editor-dialog">
+    <form id="ownerAccessForm">
+      <div class="dialog-head"><h2>Owner access</h2><button class="icon-close" type="button" data-close-dialog aria-label="Close">×</button></div>
+      <div class="dialog-body">
+        <p class="field-help">Enter the private owner key to reveal the editing and publishing controls on this device.</p>
+        <label>Owner key<input id="ownerKeyInput" type="password" autocomplete="current-password" required></label>
+        <p id="ownerKeyError" class="form-error" role="alert" hidden>That owner key is incorrect.</p>
+        <div class="dialog-actions"><button type="button" data-close-dialog>Cancel</button><button class="primary-btn" type="submit">Unlock editing</button></div>
+      </div>
+    </form>
   </dialog>
 
   <dialog id="resetDialog" class="reset-dialog">
