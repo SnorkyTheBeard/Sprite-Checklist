@@ -39,6 +39,7 @@
     <section class="editor-dock" aria-label="Visual editor">
       <button id="editModeBtn" class="edit-mode-btn" type="button" aria-pressed="false">Edit Mode</button>
       <div class="editor-tools editor-only">
+        <button id="designStudioBtn" type="button">Design Studio</button>
         <button id="exportBtn" type="button">Export backup</button>
         <button id="importBtn" type="button">Import backup</button>
         <button id="resetDesignBtn" type="button">Reset design</button>
@@ -70,6 +71,146 @@
       <button id="resetBtn" class="reset-btn" type="button">Reset all progress</button>
     </footer>
   </div>
+
+  <img id="leftCustomArt" class="custom-art art-left" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="" hidden>
+  <img id="rightCustomArt" class="custom-art art-right" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="" hidden>
+
+  <dialog id="designStudioDialog" class="editor-dialog design-studio-dialog">
+    <form id="designStudioForm">
+      <div class="dialog-head"><h2>Design Studio</h2><button class="icon-close" type="button" data-close-dialog aria-label="Close">×</button></div>
+      <div class="dialog-body design-studio-body">
+        <details open>
+          <summary>Fonts and main background</summary>
+          <div class="studio-section">
+            <div class="field-grid">
+              <label>Body font<select id="themeBodyFont" data-font-select></select></label>
+              <label>Heading font<select id="themeHeadingFont" data-font-select></select></label>
+              <label>Button font<select id="themeButtonFont" data-font-select></select></label>
+              <label>Base font size<input id="themeBaseSize" type="range" min="12" max="22" step="1"><span class="range-output" id="themeBaseSizeOutput"></span></label>
+              <label>Title size<input id="themeTitleSize" type="range" min="28" max="72" step="1"><span class="range-output" id="themeTitleSizeOutput"></span></label>
+              <label>Page-heading size<input id="themePageTitleSize" type="range" min="20" max="50" step="1"><span class="range-output" id="themePageTitleSizeOutput"></span></label>
+              <label>Group-heading size<input id="themeGroupTitleSize" type="range" min="14" max="34" step="1"><span class="range-output" id="themeGroupTitleSizeOutput"></span></label>
+              <label>Sprite-label size<input id="themeSpriteLabelSize" type="range" min="11" max="26" step="1"><span class="range-output" id="themeSpriteLabelSizeOutput"></span></label>
+              <label>Checklist-button size<input id="themeChecklistButtonSize" type="range" min="11" max="22" step="1"><span class="range-output" id="themeChecklistButtonSizeOutput"></span></label>
+              <label>Main text color<input id="themeTextColor" type="color"></label>
+              <label>Secondary text color<input id="themeMutedColor" type="color"></label>
+            </div>
+            <label>Upload your own font<input id="themeCustomFontFile" type="file" accept=".woff,.woff2,.ttf,.otf,font/*"></label>
+            <button id="removeCustomFontBtn" type="button">Remove custom font</button>
+            <div class="field-grid">
+              <label>Background color<input id="themeBodyBgColor" type="color"></label>
+              <label>Background image fit<select id="themeBodyBgMode"><option value="cover">Cover</option><option value="contain">Contain</option><option value="repeat">Repeat pattern</option><option value="stretch">Stretch</option></select></label>
+            </div>
+            <label>Background image<input id="themeBodyBgFile" type="file" accept="image/*"></label>
+            <button type="button" data-remove-theme-image="bodyBgImage">Remove background image</button>
+            <label class="check-field"><input id="themeUseBuiltInBodyArt" type="checkbox"> Use built-in galaxy gradient when no image is uploaded</label>
+            <label class="check-field"><input id="themeShowStars" type="checkbox"> Show built-in stars over the background</label>
+          </div>
+        </details>
+
+        <details>
+          <summary>Header box</summary>
+          <div class="studio-section">
+            <div class="field-grid">
+              <label>Box color<input id="themeHeaderBgColor" type="color"></label>
+              <label>Text color<input id="themeHeaderTextColor" type="color"></label>
+              <label>Border color<input id="themeHeaderBorderColor" type="color"></label>
+              <label>Corner roundness<input id="themeHeaderRadius" type="range" min="0" max="50" step="1"><span class="range-output" id="themeHeaderRadiusOutput"></span></label>
+              <label>Box opacity<input id="themeHeaderOpacity" type="range" min="0" max="100" step="1"><span class="range-output" id="themeHeaderOpacityOutput"></span></label>
+              <label>Image fit<select id="themeHeaderBgMode"><option value="cover">Cover</option><option value="contain">Contain</option><option value="repeat">Repeat pattern</option><option value="stretch">Stretch</option></select></label>
+            </div>
+            <label>Header box image<input id="themeHeaderBgFile" type="file" accept="image/*"></label>
+            <button type="button" data-remove-theme-image="headerBgImage">Remove header image</button>
+          </div>
+        </details>
+
+        <details>
+          <summary>Current rarity page</summary>
+          <div class="studio-section">
+            <p class="field-help">These controls affect only the rarity page that was open when you entered Design Studio.</p>
+            <label class="check-field"><input id="themePageBgEnabled" type="checkbox"> Show a background box behind this page</label>
+            <div class="field-grid">
+              <label>Page background color<input id="themePageBgColor" type="color"></label>
+              <label>Page image fit<select id="themePageBgMode"><option value="cover">Cover</option><option value="contain">Contain</option><option value="repeat">Repeat pattern</option><option value="stretch">Stretch</option></select></label>
+            </div>
+            <label>Page background art<input id="themePageBgFile" type="file" accept="image/*"></label>
+            <button id="removePageBgBtn" type="button">Remove page background art</button>
+          </div>
+        </details>
+
+        <details>
+          <summary>Sprite collection boxes</summary>
+          <div class="studio-section">
+            <div class="field-grid">
+              <label>Box color<input id="themeCollectionBgColor" type="color"></label>
+              <label>Text color<input id="themeCollectionTextColor" type="color"></label>
+              <label>Border color<input id="themeCollectionBorderColor" type="color"></label>
+              <label>Corner roundness<input id="themeCollectionRadius" type="range" min="0" max="50" step="1"><span class="range-output" id="themeCollectionRadiusOutput"></span></label>
+              <label>Image fit<select id="themeCollectionBgMode"><option value="cover">Cover</option><option value="contain">Contain</option><option value="repeat">Repeat pattern</option><option value="stretch">Stretch</option></select></label>
+            </div>
+            <label>Collection box image<input id="themeCollectionBgFile" type="file" accept="image/*"></label>
+            <button type="button" data-remove-theme-image="collectionBgImage">Remove collection image</button>
+            <label class="check-field"><input id="themeUseBuiltInCollectionArt" type="checkbox"> Use built-in paper shading when no image is uploaded</label>
+          </div>
+        </details>
+
+        <details>
+          <summary>Boxes behind each sprite</summary>
+          <div class="studio-section">
+            <div class="field-grid">
+              <label>Card color<input id="themeCardBgColor" type="color"></label>
+              <label>Card text color<input id="themeCardTextColor" type="color"></label>
+              <label>Card border color<input id="themeCardBorderColor" type="color"></label>
+              <label>Card roundness<input id="themeCardRadius" type="range" min="0" max="45" step="1"><span class="range-output" id="themeCardRadiusOutput"></span></label>
+              <label>Card image fit<select id="themeCardBgMode"><option value="cover">Cover</option><option value="contain">Contain</option><option value="repeat">Repeat pattern</option><option value="stretch">Stretch</option></select></label>
+            </div>
+            <label>Card background image<input id="themeCardBgFile" type="file" accept="image/*"></label>
+            <button type="button" data-remove-theme-image="cardBgImage">Remove card image</button>
+          </div>
+        </details>
+
+        <details>
+          <summary>Sprite image wells</summary>
+          <div class="studio-section">
+            <div class="field-grid">
+              <label>Image-well color<input id="themeWellBgColor" type="color"></label>
+              <label>Image-well border<input id="themeWellBorderColor" type="color"></label>
+              <label>Image fit<select id="themeWellBgMode"><option value="cover">Cover</option><option value="contain">Contain</option><option value="repeat">Repeat pattern</option><option value="stretch">Stretch</option></select></label>
+            </div>
+            <label>Image-well artwork<input id="themeWellBgFile" type="file" accept="image/*"></label>
+            <button type="button" data-remove-theme-image="wellBgImage">Remove image-well artwork</button>
+            <label class="check-field"><input id="themeUseBuiltInWellArt" type="checkbox"> Use built-in image-well gradient when no artwork is uploaded</label>
+          </div>
+        </details>
+
+        <details>
+          <summary>Tabs, counters, and buttons</summary>
+          <div class="studio-section field-grid">
+            <label>Tab color<input id="themeTabBgColor" type="color"></label>
+            <label>Selected tab color<input id="themeTabActiveColor" type="color"></label>
+            <label>Progress-box color<input id="themeSummaryBgColor" type="color"></label>
+            <label>Button color<input id="themeButtonBgColor" type="color"></label>
+            <label>Button text<input id="themeButtonTextColor" type="color"></label>
+            <label>Check/accent color<input id="themeAccentColor" type="color"></label>
+          </div>
+        </details>
+
+        <details>
+          <summary>Your side artwork</summary>
+          <div class="studio-section">
+            <p class="field-help">Upload transparent PNG artwork to create custom borders down either side of the app.</p>
+            <label>Left-side artwork<input id="themeLeftArtFile" type="file" accept="image/*"></label>
+            <button type="button" data-remove-theme-image="leftArt">Remove left artwork</button>
+            <label>Right-side artwork<input id="themeRightArtFile" type="file" accept="image/*"></label>
+            <button type="button" data-remove-theme-image="rightArt">Remove right artwork</button>
+            <label>Artwork width<input id="themeArtWidth" type="range" min="40" max="260" step="5"><span class="range-output" id="themeArtWidthOutput"></span></label>
+          </div>
+        </details>
+
+        <div class="dialog-actions sticky-actions"><button type="button" data-close-dialog>Cancel</button><button class="primary-btn" type="submit">Apply design</button></div>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="headerEditorDialog" class="editor-dialog">
     <form id="headerEditorForm">

@@ -23,6 +23,29 @@
     description:'Track every available variant in this rarity.'
   }]));
 
+  const FONT_OPTIONS = {
+    system:{ label:'System / clean', css:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif' },
+    rounded:{ label:'Rounded', css:'"Trebuchet MS","Arial Rounded MT Bold",Arial,sans-serif' },
+    storybook:{ label:'Storybook serif', css:'Georgia,"Times New Roman",serif' },
+    playful:{ label:'Playful', css:'"Comic Sans MS","Trebuchet MS",cursive' },
+    bold:{ label:'Bold display', css:'Impact,"Arial Black",sans-serif' },
+    mono:{ label:'Monospace', css:'"Courier New",monospace' },
+    custom:{ label:'My uploaded font', css:'"UserCustomFont",sans-serif' }
+  };
+
+  const DEFAULT_THEME = {
+    bodyFont:'system', headingFont:'system', buttonFont:'system', customFontData:'', customFontName:'',
+    baseSize:16, titleSize:48, pageTitleSize:34, groupTitleSize:20, spriteLabelSize:16, checklistButtonSize:16, textColor:'#ffffff', mutedColor:'#c8c3e5',
+    bodyBgColor:'#080a24', bodyBgImage:'', bodyBgMode:'cover', useBuiltInBodyArt:true, showStars:true,
+    headerBgColor:'#21184d', headerBgImage:'', headerBgMode:'cover', headerTextColor:'#ffffff', headerBorderColor:'#564d80', headerRadius:24, headerOpacity:90,
+    collectionBgColor:'#f3dfb4', collectionBgImage:'', collectionBgMode:'cover', useBuiltInCollectionArt:true, collectionTextColor:'#2a2144', collectionBorderColor:'#ffe097', collectionRadius:24,
+    cardBgColor:'#fffaf0', cardBgImage:'', cardBgMode:'cover', cardTextColor:'#33234e', cardBorderColor:'#bca8cf', cardRadius:20,
+    wellBgColor:'#e7ddfa', wellBgImage:'', wellBgMode:'cover', useBuiltInWellArt:true, wellBorderColor:'#b9a8d5',
+    tabBgColor:'#14133d', tabActiveColor:'#ffcf55', summaryBgColor:'#302b5c', buttonBgColor:'#ffffff', buttonTextColor:'#33234e', accentColor:'#59c8ff',
+    leftArt:'', rightArt:'', artWidth:120,
+    pageBackgrounds:Object.fromEntries(rarities.map((rarity) => [rarity,{ enabled:false, color:'#080a24', image:'', mode:'cover' }]))
+  };
+
   let activeRarity = rarityFromHash() || defaultRarity;
   let state = loadJson(PROGRESS_KEY, {});
   let design = loadDesign();
@@ -31,6 +54,10 @@
   let touchStart = null;
   let pendingVariantImage;
   let previewObjectUrl;
+  let studioDraft;
+  let studioOriginal;
+  let studioPageRarity;
+  let studioCommitted = false;
 
   const tabsEl = document.getElementById('rarityTabs');
   const collectionsEl = document.getElementById('collections');
@@ -56,10 +83,16 @@
   }
 
   function normalizeDesign(stored = {}) {
+    const storedTheme = stored.theme || {};
     return {
       header:{ ...DEFAULT_HEADER, ...(stored.header || {}) },
       pages:Object.fromEntries(rarities.map((rarity) => [rarity, { ...DEFAULT_PAGES[rarity], ...(stored.pages?.[rarity] || {}) }])),
-      families:stored.families && typeof stored.families === 'object' ? stored.families : {}
+      families:stored.families && typeof stored.families === 'object' ? stored.families : {},
+      theme:{
+        ...DEFAULT_THEME,
+        ...storedTheme,
+        pageBackgrounds:Object.fromEntries(rarities.map((rarity) => [rarity,{ ...DEFAULT_THEME.pageBackgrounds[rarity], ...(storedTheme.pageBackgrounds?.[rarity] || {}) }]))
+      }
     };
   }
 
@@ -132,6 +165,79 @@
     const text = String(value ?? '');
     element.textContent = text || (editMode ? editPlaceholder : '');
     element.hidden = !text && !editMode;
+  }
+
+  function imageMode(mode) {
+    if (mode === 'contain') return { size:'contain', repeat:'no-repeat' };
+    if (mode === 'repeat') return { size:'auto', repeat:'repeat' };
+    if (mode === 'stretch') return { size:'100% 100%', repeat:'no-repeat' };
+    return { size:'cover', repeat:'no-repeat' };
+  }
+
+  function applyImageSurface(root, prefix, image, mode, useBuiltInWhenEmpty = false) {
+    const property = `--theme-${prefix}-image`;
+    if (image) root.style.setProperty(property, `url("${image}")`);
+    else if (useBuiltInWhenEmpty) root.style.removeProperty(property);
+    else root.style.setProperty(property,'none');
+    const sizing = imageMode(mode);
+    root.style.setProperty(`--theme-${prefix}-size`,sizing.size);
+    root.style.setProperty(`--theme-${prefix}-repeat`,sizing.repeat);
+  }
+
+  function applyTheme() {
+    const theme = design.theme || DEFAULT_THEME;
+    const root = document.documentElement;
+    const customFontStyle = document.getElementById('userCustomFontStyle') || document.head.appendChild(Object.assign(document.createElement('style'),{ id:'userCustomFontStyle' }));
+    customFontStyle.textContent = theme.customFontData ? `@font-face{font-family:"UserCustomFont";src:url("${theme.customFontData}");font-display:swap;}` : '';
+    root.style.setProperty('--font-body',FONT_OPTIONS[theme.bodyFont]?.css || FONT_OPTIONS.system.css);
+    root.style.setProperty('--font-heading',FONT_OPTIONS[theme.headingFont]?.css || FONT_OPTIONS.system.css);
+    root.style.setProperty('--font-button',FONT_OPTIONS[theme.buttonFont]?.css || FONT_OPTIONS.system.css);
+    root.style.setProperty('--theme-base-size',`${theme.baseSize}px`);
+    root.style.setProperty('--theme-title-size',`${theme.titleSize}px`);
+    root.style.setProperty('--theme-page-title-size',`${theme.pageTitleSize}px`);
+    root.style.setProperty('--theme-group-title-size',`${theme.groupTitleSize}px`);
+    root.style.setProperty('--theme-sprite-label-size',`${theme.spriteLabelSize}px`);
+    root.style.setProperty('--theme-checklist-button-size',`${theme.checklistButtonSize}px`);
+    root.style.setProperty('--theme-text',theme.textColor);
+    root.style.setProperty('--theme-muted',theme.mutedColor);
+    root.style.setProperty('--theme-body-bg',theme.bodyBgColor);
+    root.style.setProperty('--theme-header-bg',theme.headerBgColor);
+    root.style.setProperty('--theme-header-text',theme.headerTextColor);
+    root.style.setProperty('--theme-header-border',theme.headerBorderColor);
+    root.style.setProperty('--theme-header-radius',`${theme.headerRadius}px`);
+    root.style.setProperty('--theme-header-opacity',`${theme.headerOpacity}%`);
+    root.style.setProperty('--theme-collection-bg',theme.collectionBgColor);
+    root.style.setProperty('--theme-collection-text',theme.collectionTextColor);
+    root.style.setProperty('--theme-collection-border',theme.collectionBorderColor);
+    root.style.setProperty('--theme-collection-radius',`${theme.collectionRadius}px`);
+    root.style.setProperty('--theme-card-bg',theme.cardBgColor);
+    root.style.setProperty('--theme-card-text',theme.cardTextColor);
+    root.style.setProperty('--theme-card-border',theme.cardBorderColor);
+    root.style.setProperty('--theme-card-radius',`${theme.cardRadius}px`);
+    root.style.setProperty('--theme-well-bg',theme.wellBgColor);
+    root.style.setProperty('--theme-well-border',theme.wellBorderColor);
+    root.style.setProperty('--theme-tab-bg',theme.tabBgColor);
+    root.style.setProperty('--theme-tab-active',theme.tabActiveColor);
+    root.style.setProperty('--theme-summary-bg',theme.summaryBgColor);
+    root.style.setProperty('--theme-button-bg',theme.buttonBgColor);
+    root.style.setProperty('--theme-button-text',theme.buttonTextColor);
+    root.style.setProperty('--theme-accent',theme.accentColor);
+    root.style.setProperty('--theme-art-width',`${theme.artWidth}px`);
+    applyImageSurface(root,'body',theme.bodyBgImage,theme.bodyBgMode,theme.useBuiltInBodyArt);
+    applyImageSurface(root,'header',theme.headerBgImage,theme.headerBgMode);
+    applyImageSurface(root,'collection',theme.collectionBgImage,theme.collectionBgMode,theme.useBuiltInCollectionArt);
+    applyImageSurface(root,'card',theme.cardBgImage,theme.cardBgMode);
+    applyImageSurface(root,'well',theme.wellBgImage,theme.wellBgMode,theme.useBuiltInWellArt);
+    const pageTheme = theme.pageBackgrounds?.[activeRarity] || DEFAULT_THEME.pageBackgrounds[activeRarity];
+    root.style.setProperty('--theme-page-bg',pageTheme.enabled ? pageTheme.color : 'transparent');
+    applyImageSurface(root,'page',pageTheme.enabled ? pageTheme.image : '',pageTheme.mode);
+    document.body.classList.toggle('hide-stars',!theme.showStars);
+    const leftArt = document.getElementById('leftCustomArt');
+    const rightArt = document.getElementById('rightCustomArt');
+    leftArt.src = theme.leftArt || '';
+    rightArt.src = theme.rightArt || '';
+    leftArt.hidden = !theme.leftArt;
+    rightArt.hidden = !theme.rightArt;
   }
 
   function renderHeader() {
@@ -291,6 +397,7 @@
   }
 
   function renderCollections() {
+    applyTheme();
     collectionsEl.innerHTML = '';
     const page = design.pages[activeRarity] || DEFAULT_PAGES[activeRarity];
     renderText(pageEyebrowEl, page.eyebrow, '[No small heading]');
@@ -353,6 +460,7 @@
   }
 
   function renderAll() {
+    applyTheme();
     document.body.classList.toggle('edit-mode', editMode);
     document.getElementById('editModeBtn').setAttribute('aria-pressed', String(editMode));
     document.getElementById('editModeBtn').textContent = editMode ? 'Done Editing' : 'Edit Mode';
@@ -385,6 +493,96 @@
     statusToast.textContent = message;
     statusToast.classList.add('show');
     toastTimer = setTimeout(() => statusToast.classList.remove('show'), 1800);
+  }
+
+  const STUDIO_FIELD_MAP = {
+    themeBodyFont:'bodyFont', themeHeadingFont:'headingFont', themeButtonFont:'buttonFont',
+    themeBaseSize:'baseSize', themeTitleSize:'titleSize', themePageTitleSize:'pageTitleSize', themeGroupTitleSize:'groupTitleSize', themeSpriteLabelSize:'spriteLabelSize', themeChecklistButtonSize:'checklistButtonSize', themeTextColor:'textColor', themeMutedColor:'mutedColor',
+    themeBodyBgColor:'bodyBgColor', themeBodyBgMode:'bodyBgMode', themeUseBuiltInBodyArt:'useBuiltInBodyArt', themeShowStars:'showStars',
+    themeHeaderBgColor:'headerBgColor', themeHeaderTextColor:'headerTextColor', themeHeaderBorderColor:'headerBorderColor', themeHeaderRadius:'headerRadius', themeHeaderOpacity:'headerOpacity', themeHeaderBgMode:'headerBgMode',
+    themeCollectionBgColor:'collectionBgColor', themeCollectionTextColor:'collectionTextColor', themeCollectionBorderColor:'collectionBorderColor', themeCollectionRadius:'collectionRadius', themeCollectionBgMode:'collectionBgMode', themeUseBuiltInCollectionArt:'useBuiltInCollectionArt',
+    themeCardBgColor:'cardBgColor', themeCardTextColor:'cardTextColor', themeCardBorderColor:'cardBorderColor', themeCardRadius:'cardRadius', themeCardBgMode:'cardBgMode',
+    themeWellBgColor:'wellBgColor', themeWellBorderColor:'wellBorderColor', themeWellBgMode:'wellBgMode', themeUseBuiltInWellArt:'useBuiltInWellArt',
+    themeTabBgColor:'tabBgColor', themeTabActiveColor:'tabActiveColor', themeSummaryBgColor:'summaryBgColor', themeButtonBgColor:'buttonBgColor', themeButtonTextColor:'buttonTextColor', themeAccentColor:'accentColor',
+    themeArtWidth:'artWidth'
+  };
+
+  const STUDIO_IMAGE_INPUTS = {
+    themeBodyBgFile:'bodyBgImage', themeHeaderBgFile:'headerBgImage', themeCollectionBgFile:'collectionBgImage',
+    themeCardBgFile:'cardBgImage', themeWellBgFile:'wellBgImage', themeLeftArtFile:'leftArt', themeRightArtFile:'rightArt'
+  };
+
+  function cloneJson(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function populateFontSelects() {
+    document.querySelectorAll('[data-font-select]').forEach((select) => {
+      select.innerHTML = '';
+      Object.entries(FONT_OPTIONS).forEach(([value,option]) => {
+        const element = document.createElement('option');
+        element.value = value;
+        element.textContent = option.label;
+        select.appendChild(element);
+      });
+    });
+  }
+
+  function updateStudioOutputs() {
+    const outputs = {
+      themeBaseSizeOutput:`${document.getElementById('themeBaseSize').value}px`,
+      themeTitleSizeOutput:`${document.getElementById('themeTitleSize').value}px`,
+      themePageTitleSizeOutput:`${document.getElementById('themePageTitleSize').value}px`,
+      themeGroupTitleSizeOutput:`${document.getElementById('themeGroupTitleSize').value}px`,
+      themeSpriteLabelSizeOutput:`${document.getElementById('themeSpriteLabelSize').value}px`,
+      themeChecklistButtonSizeOutput:`${document.getElementById('themeChecklistButtonSize').value}px`,
+      themeHeaderRadiusOutput:`${document.getElementById('themeHeaderRadius').value}px`,
+      themeHeaderOpacityOutput:`${document.getElementById('themeHeaderOpacity').value}%`,
+      themeCollectionRadiusOutput:`${document.getElementById('themeCollectionRadius').value}px`,
+      themeCardRadiusOutput:`${document.getElementById('themeCardRadius').value}px`,
+      themeArtWidthOutput:`${document.getElementById('themeArtWidth').value}px`
+    };
+    Object.entries(outputs).forEach(([id,value]) => { document.getElementById(id).textContent = value; });
+  }
+
+  function fillStudioFields() {
+    Object.entries(STUDIO_FIELD_MAP).forEach(([id,key]) => {
+      const field = document.getElementById(id);
+      if (field.type === 'checkbox') field.checked = Boolean(studioDraft[key]);
+      else field.value = studioDraft[key];
+    });
+    const page = studioDraft.pageBackgrounds[studioPageRarity];
+    document.getElementById('themePageBgEnabled').checked = page.enabled;
+    document.getElementById('themePageBgColor').value = page.color;
+    document.getElementById('themePageBgMode').value = page.mode;
+    Object.keys(STUDIO_IMAGE_INPUTS).forEach((id) => { document.getElementById(id).value = ''; });
+    document.getElementById('themePageBgFile').value = '';
+    document.getElementById('themeCustomFontFile').value = '';
+    updateStudioOutputs();
+  }
+
+  function previewStudioDraft() {
+    design.theme = studioDraft;
+    applyTheme();
+    updateStudioOutputs();
+  }
+
+  function openDesignStudio() {
+    studioPageRarity = activeRarity;
+    studioOriginal = cloneJson(design.theme);
+    studioDraft = cloneJson(design.theme);
+    studioCommitted = false;
+    fillStudioFields();
+    document.getElementById('designStudioDialog').showModal();
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve,reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   }
 
   function openHeaderEditor() {
@@ -511,6 +709,122 @@
   });
   document.getElementById('editHeaderBtn').addEventListener('click', openHeaderEditor);
   document.getElementById('editPageBtn').addEventListener('click', openPageEditor);
+  document.getElementById('designStudioBtn').addEventListener('click', openDesignStudio);
+
+  Object.entries(STUDIO_FIELD_MAP).forEach(([id,key]) => {
+    document.getElementById(id).addEventListener('input', (event) => {
+      if (!studioDraft) return;
+      const field = event.currentTarget;
+      studioDraft[key] = field.type === 'checkbox' ? field.checked : (field.type === 'range' ? Number(field.value) : field.value);
+      previewStudioDraft();
+    });
+  });
+
+  ['themePageBgEnabled','themePageBgColor','themePageBgMode'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', (event) => {
+      if (!studioDraft) return;
+      const page = studioDraft.pageBackgrounds[studioPageRarity];
+      if (id === 'themePageBgEnabled') page.enabled = event.currentTarget.checked;
+      if (id === 'themePageBgColor') page.color = event.currentTarget.value;
+      if (id === 'themePageBgMode') page.mode = event.currentTarget.value;
+      previewStudioDraft();
+    });
+  });
+
+  Object.entries(STUDIO_IMAGE_INPUTS).forEach(([id,key]) => {
+    document.getElementById(id).addEventListener('change', async (event) => {
+      const file = event.currentTarget.files?.[0];
+      if (!file || !studioDraft) return;
+      try {
+        studioDraft[key] = await resizeImage(file,1800);
+        previewStudioDraft();
+        showToast('Artwork loaded');
+      } catch {
+        alert('That artwork could not be read.');
+      }
+    });
+  });
+
+  document.getElementById('themePageBgFile').addEventListener('change', async (event) => {
+    const file = event.currentTarget.files?.[0];
+    if (!file || !studioDraft) return;
+    try {
+      const page = studioDraft.pageBackgrounds[studioPageRarity];
+      page.image = await resizeImage(file,1800);
+      page.enabled = true;
+      document.getElementById('themePageBgEnabled').checked = true;
+      previewStudioDraft();
+      showToast('Page artwork loaded');
+    } catch {
+      alert('That page artwork could not be read.');
+    }
+  });
+
+  document.querySelectorAll('[data-remove-theme-image]').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (!studioDraft) return;
+      studioDraft[button.dataset.removeThemeImage] = '';
+      previewStudioDraft();
+      showToast('Artwork removed');
+    });
+  });
+
+  document.getElementById('removePageBgBtn').addEventListener('click', () => {
+    if (!studioDraft) return;
+    studioDraft.pageBackgrounds[studioPageRarity].image = '';
+    previewStudioDraft();
+    showToast('Page artwork removed');
+  });
+
+  document.getElementById('themeCustomFontFile').addEventListener('change', async (event) => {
+    const file = event.currentTarget.files?.[0];
+    if (!file || !studioDraft) return;
+    if (file.size > 1800000) {
+      alert('That font is too large. Use a WOFF or WOFF2 font under 1.8 MB.');
+      return;
+    }
+    try {
+      studioDraft.customFontData = await readFileAsDataUrl(file);
+      studioDraft.customFontName = file.name;
+      studioDraft.bodyFont = 'custom';
+      studioDraft.headingFont = 'custom';
+      studioDraft.buttonFont = 'custom';
+      fillStudioFields();
+      previewStudioDraft();
+      showToast('Custom font loaded');
+    } catch {
+      alert('That font could not be read.');
+    }
+  });
+
+  document.getElementById('removeCustomFontBtn').addEventListener('click', () => {
+    if (!studioDraft) return;
+    studioDraft.customFontData = '';
+    studioDraft.customFontName = '';
+    ['bodyFont','headingFont','buttonFont'].forEach((key) => { if (studioDraft[key] === 'custom') studioDraft[key] = 'system'; });
+    fillStudioFields();
+    previewStudioDraft();
+    showToast('Custom font removed');
+  });
+
+  document.getElementById('designStudioForm').addEventListener('submit', (event) => {
+    event.preventDefault();
+    design.theme = studioDraft;
+    if (!saveDesign()) return;
+    studioCommitted = true;
+    document.getElementById('designStudioDialog').close();
+    renderAll();
+    showToast('Design applied');
+  });
+
+  document.getElementById('designStudioDialog').addEventListener('close', () => {
+    if (!studioCommitted && studioOriginal) {
+      design.theme = studioOriginal;
+      applyTheme();
+    }
+    studioDraft = null;
+    studioOriginal = null;
+  });
 
   document.getElementById('headerEditorForm').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -613,7 +927,7 @@
   });
   document.getElementById('resetDesignBtn').addEventListener('click', () => {
     if (!confirm('Reset all text, images, and visibility changes to the original design? Checklist progress will stay.')) return;
-    design = { header:{...DEFAULT_HEADER}, pages:JSON.parse(JSON.stringify(DEFAULT_PAGES)), families:{} };
+    design = normalizeDesign({});
     saveDesign();
     renderAll();
     showToast('Original design restored');
@@ -643,6 +957,7 @@
   document.getElementById('resetBtn').addEventListener('click', () => resetDialog.showModal());
   document.getElementById('confirmResetBtn').addEventListener('click', resetProgress);
 
+  populateFontSelects();
   renderAll();
   switchRarity(activeRarity, { historyMode:'replace' });
   if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));

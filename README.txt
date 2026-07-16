@@ -18,11 +18,17 @@ Quick review
 
 Visual editing
 1. Select Edit Mode below the header.
-2. Use Edit header, Edit page, Edit group, or Edit sprite directly on the item you want to change.
-3. Leave a text field empty to remove that text.
-4. Sprite images can be replaced from the phone or computer, removed, or restored.
-5. Hidden sprites and groups remain visible in Edit Mode so they can be restored later.
-6. Use Export backup before moving devices or making large changes. Import backup restores the design and checklist progress.
+2. Open Design Studio to customize the complete visual theme.
+3. Upload separate artwork for the main background, header box, current rarity page, collection boxes, sprite cards, image wells, and the left/right borders.
+4. Choose separate body, heading, and button fonts, or upload your own WOFF, WOFF2, TTF, or OTF font.
+5. Adjust title, page-heading, group-heading, sprite-label, and checklist-button sizes independently.
+6. Change box colors, text colors, borders, opacity, corner roundness, image fit, tabs, counters, buttons, and check colors.
+7. Design Studio changes preview immediately; select Apply design to save or Cancel to undo the preview.
+8. Use Edit header, Edit page, Edit group, or Edit sprite directly on the item you want to change.
+9. Leave a text field empty to remove that text.
+10. Sprite images can be replaced from the phone or computer, removed, or restored.
+11. Hidden sprites and groups remain visible in Edit Mode so they can be restored later.
+12. Use Export backup before moving devices or making large changes. Import backup restores the complete design, custom art, fonts, and checklist progress.
 
 Notes
 - Mastering a sprite also marks it collected.
