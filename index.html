@@ -3,15 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#050505">
+  <meta name="theme-color" content="#111342">
   <meta name="description" content="A visually editable Fortnite Sprite checklist with collected and mastered progress.">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Fortnite Sprite Tracker">
-  <title>Fortnite Sprite Tracker</title>
+  <title>Galaxy Sprite Checklist</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
-  <link rel="preload" as="image" href="published-assets/theme-body-bg-image.webp" fetchpriority="high">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -20,14 +18,14 @@
   <div class="app-shell">
     <header class="hero" id="hero">
       <button class="edit-chip editor-only" id="editHeaderBtn" type="button">Edit header</button>
-      <p class="kicker" id="heroKicker" hidden></p>
-      <h1 id="heroTitle">Fortnite Sprite Tracker</h1>
-      <p class="sub" id="heroSubtitle" hidden></p>
+      <p class="kicker" id="heroKicker">Fortnite Collection Tracker</p>
+      <h1 id="heroTitle">Galaxy Sprite Checklist</h1>
+      <p class="sub" id="heroSubtitle">Tap a sprite to mark it collected. Tap its crown when it is mastered.</p>
 
       <div class="summary" role="group" aria-label="Overall progress">
         <div>
           <strong id="collectedTotal">0 / 0</strong>
-          <span id="collectedLabel">In Collection</span>
+          <span id="collectedLabel">Collected</span>
           <span class="progress-track" aria-hidden="true"><i id="collectedBar"></i></span>
         </div>
         <div>
@@ -61,7 +59,7 @@
     <main id="checklistPage" role="tabpanel" aria-labelledby="activePageTitle">
       <header class="page-head">
         <div>
-          <p class="page-eyebrow" id="pageEyebrow" hidden></p>
+          <p class="page-eyebrow" id="pageEyebrow">Checklist page</p>
           <h2 id="activePageTitle">Rare Sprites</h2>
           <p id="pageDescription">Track every available variant in this rarity.</p>
         </div>
@@ -76,7 +74,7 @@
     </main>
 
     <footer>
-      <p id="footerNote">All Progress Saves Locally</p>
+      <p id="footerNote">Progress is saved on this device.</p>
       <button id="resetBtn" class="reset-btn" type="button">Reset all progress</button>
       <button id="ownerAccessBtn" class="owner-access-btn" type="button">Owner access</button>
     </footer>

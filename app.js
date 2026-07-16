@@ -619,7 +619,6 @@
       });
       const row = section.querySelector('.variant-row');
       let rowGesture = null;
-      let rowGlideFrame = 0;
       let suppressRowClickUntil = 0;
       const findTouch = (list,id) => {
         for (let index = 0; index < list.length; index += 1) if (list[index].identifier === id) return list[index];
@@ -627,11 +626,8 @@
       };
       row.addEventListener('touchstart', (event) => {
         if (event.touches.length !== 1) return;
-        if (rowGlideFrame) cancelAnimationFrame(rowGlideFrame);
-        rowGlideFrame = 0;
-        row.classList.remove('is-touch-dragging');
         const touch = event.touches[0];
-        rowGesture = { id:touch.identifier, x:touch.clientX, y:touch.clientY, lastX:touch.clientX, lastTime:performance.now(), velocity:0, horizontal:false };
+        rowGesture = { id:touch.identifier, x:touch.clientX, y:touch.clientY, scrollLeft:row.scrollLeft, horizontal:false };
       }, { passive:true });
       row.addEventListener('touchmove', (event) => {
         if (!rowGesture) return;
@@ -649,55 +645,16 @@
           row.classList.add('is-touch-dragging');
         }
         event.preventDefault();
-        const now = performance.now();
-        const elapsed = Math.max(1,now - rowGesture.lastTime);
-        const movement = touch.clientX - rowGesture.lastX;
-        const instantVelocity = Math.max(-2.8,Math.min(2.8,-movement / elapsed));
-        rowGesture.velocity = rowGesture.velocity * .58 + instantVelocity * .42;
-        row.scrollLeft -= movement;
-        rowGesture.lastX = touch.clientX;
-        rowGesture.lastTime = now;
+        row.scrollLeft = rowGesture.scrollLeft - dx;
       }, { passive:false });
-      const settleRow = () => {
-        rowGlideFrame = 0;
-        row.classList.remove('is-touch-dragging');
-        const cards = [...row.querySelectorAll('.card')];
-        if (!cards.length || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-        const rowBox = row.getBoundingClientRect();
-        const positions = cards.map((card) => row.scrollLeft + card.getBoundingClientRect().left - rowBox.left - 2);
-        const target = positions.reduce((closest,position) => Math.abs(position - row.scrollLeft) < Math.abs(closest - row.scrollLeft) ? position : closest,positions[0]);
-        row.scrollTo({ left:Math.max(0,target), behavior:'smooth' });
-      };
-      const glideRow = (startingVelocity) => {
-        let velocity = Math.max(-2.8,Math.min(2.8,startingVelocity));
-        if (Math.abs(velocity) < .08 || matchMedia('(prefers-reduced-motion: reduce)').matches) return settleRow();
-        let previous = performance.now();
-        const step = (now) => {
-          const elapsed = Math.min(34,Math.max(1,now - previous));
-          previous = now;
-          const before = row.scrollLeft;
-          row.scrollLeft += velocity * elapsed;
-          if (Math.abs(row.scrollLeft - before) < .1) velocity = 0;
-          velocity *= Math.pow(.94,elapsed / 16.67);
-          if (Math.abs(velocity) > .025) rowGlideFrame = requestAnimationFrame(step);
-          else settleRow();
-        };
-        rowGlideFrame = requestAnimationFrame(step);
-      };
       const endRowGesture = (event) => {
         if (!rowGesture || !findTouch(event.changedTouches,rowGesture.id)) return;
-        if (rowGesture.horizontal) {
-          suppressRowClickUntil = Date.now() + 450;
-          glideRow(rowGesture.velocity);
-        } else row.classList.remove('is-touch-dragging');
+        if (rowGesture.horizontal) suppressRowClickUntil = Date.now() + 350;
         rowGesture = null;
+        row.classList.remove('is-touch-dragging');
       };
       row.addEventListener('touchend',endRowGesture,{ passive:true });
-      row.addEventListener('touchcancel', (event) => {
-        if (!rowGesture || !findTouch(event.changedTouches,rowGesture.id)) return;
-        rowGesture = null;
-        settleRow();
-      }, { passive:true });
+      row.addEventListener('touchcancel',endRowGesture,{ passive:true });
       row.addEventListener('click', (event) => {
         if (Date.now() < suppressRowClickUntil) {
           event.preventDefault();

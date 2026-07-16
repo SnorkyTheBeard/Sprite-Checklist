@@ -1,13 +1,13 @@
 {
-  "name": "Fortnite Sprite Tracker",
-  "short_name": "Sprite Tracker",
+  "name": "Galaxy Sprite Checklist",
+  "short_name": "Sprite Checklist",
   "description": "A visually editable Fortnite Sprite checklist with collected and mastered progress.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#050505",
-  "theme_color": "#050505",
+  "background_color": "#080a24",
+  "theme_color": "#111342",
   "icons": [
     {"src":"icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
     {"src":"icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}

@@ -10,19 +10,19 @@
   --shadow:0 16px 38px rgba(4,4,20,.34);
   --safe-top:env(safe-area-inset-top, 0px);
   --safe-bottom:env(safe-area-inset-bottom, 0px);
-  --font-body:"Comic Sans MS","Trebuchet MS",cursive;
+  --font-body:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
   --font-heading:var(--font-body);
-  --font-button:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
-  --theme-text:#f9f001;
+  --font-button:var(--font-body);
+  --theme-text:#ffffff;
   --theme-muted:#c8c3e5;
-  --theme-body-bg:#050505;
-  --theme-body-image:url("published-assets/theme-body-bg-image.webp");
+  --theme-body-bg:#080a24;
+  --theme-body-image:radial-gradient(circle at 14% 5%,rgba(106,80,255,.38),transparent 32rem),radial-gradient(circle at 88% 26%,rgba(29,168,255,.22),transparent 28rem),linear-gradient(180deg,#111342 0,#080a24 50%,#050617 100%);
   --theme-body-size:cover;
   --theme-header-bg:#21184d;
   --theme-header-image:none;
   --theme-header-size:cover;
   --theme-header-text:#ffffff;
-  --theme-header-border:#564d80;
+  --theme-header-border:rgba(255,255,255,.18);
   --theme-header-radius:24px;
   --theme-header-opacity:90%;
   --theme-page-bg:transparent;
@@ -48,16 +48,16 @@
   --theme-button-text:#33234e;
   --theme-accent:#59c8ff;
   --theme-art-width:120px;
-  --theme-base-size:17px;
-  --theme-title-size:56px;
-  --theme-page-title-size:38px;
+  --theme-base-size:16px;
+  --theme-title-size:48px;
+  --theme-page-title-size:34px;
   --theme-group-title-size:20px;
-  --theme-sprite-label-size:23px;
-  --theme-checklist-button-size:13px;
+  --theme-sprite-label-size:16px;
+  --theme-checklist-button-size:16px;
 }
 
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-html { scroll-behavior:smooth; background:#050505; }
+html { scroll-behavior:smooth; background:#080a24; }
 body {
   margin:0;
   min-width:280px;
