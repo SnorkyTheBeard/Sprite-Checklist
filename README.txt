@@ -33,8 +33,10 @@ Visual editing
 12. Reorder boxes independently in Edit Mode. On a computer, drag the Move handle and drop on the left or right side of another box. On a phone or tablet, use the left and right arrow buttons. Each row remembers its own order.
 13. Select Add sprite group to create a future group, choose its rarity, and enter any comma-separated starting boxes you need.
 14. Edit group can rename or reclassify a group, hide it temporarily, or delete the entire group after confirmation.
-15. Hidden sprites and groups remain visible in Edit Mode so they can be restored later.
-16. Use Export backup before moving devices or making large changes. Import backup restores the complete design, custom groups, custom art, fonts, row order, and checklist progress.
+15. Select Add box on any row to append one empty sprite box. Open an individual sprite and choose Delete this box to remove only that box.
+16. Hidden sprites and groups remain visible in Edit Mode so they can be restored later.
+17. Use Export backup before moving devices or making large changes. Import backup restores the complete design, custom groups and boxes, custom art, fonts, row order, and checklist progress.
+18. Select Save changes whenever you want reassurance that the current design and progress are stored. Individual edits also continue to save automatically.
 
 Notes
 - Mastering a sprite also marks it collected.

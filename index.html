@@ -44,6 +44,7 @@
         <button id="exportBtn" type="button">Export backup</button>
         <button id="importBtn" type="button">Import backup</button>
         <button id="resetDesignBtn" type="button">Reset design</button>
+        <button id="saveChangesBtn" class="save-edit-btn" type="button">Save changes</button>
         <input id="importFile" class="visually-hidden" type="file" accept="application/json,.json">
       </div>
     </section>
@@ -288,7 +289,20 @@
         </div>
         <label class="check-field"><input id="editVariantVisible" type="checkbox"> Show this sprite in the checklist</label>
         <p class="field-help">Large uploads are resized before saving. Changes stay on this device unless you export a backup.</p>
+        <button id="deleteVariantBtn" class="danger-btn wide-action" type="button">Delete this box</button>
         <div class="dialog-actions"><button type="button" data-close-dialog>Cancel</button><button class="primary-btn" type="submit">Save sprite</button></div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="addVariantDialog" class="editor-dialog">
+    <form id="addVariantForm">
+      <div class="dialog-head"><h2>Add box</h2><button class="icon-close" type="button" data-close-dialog aria-label="Close">×</button></div>
+      <div class="dialog-body">
+        <input id="newVariantFamilyId" type="hidden">
+        <label>Box label<input id="newVariantName" type="text" required placeholder="New variant"></label>
+        <p class="field-help">The new box starts empty. Add artwork by opening it or dropping an image onto it in Edit Mode.</p>
+        <div class="dialog-actions"><button type="button" data-close-dialog>Cancel</button><button class="primary-btn" type="submit">Add box</button></div>
       </div>
     </form>
   </dialog>

@@ -154,12 +154,18 @@
     return {
       name:hasOwn(custom,'name') ? custom.name : variant.name,
       image:hasOwn(custom,'image') ? custom.image : variant.image,
-      visible:hasOwn(custom,'visible') ? custom.visible : true
+      visible:hasOwn(custom,'visible') ? custom.visible : true,
+      deleted:Boolean(custom.deleted)
     };
   }
 
+  function familyVariants(family) {
+    const added = Array.isArray(design.families[family.id]?.addedVariants) ? design.families[family.id].addedVariants : [];
+    return [...family.variants,...added].filter((variant) => !variantView(family,variant).deleted);
+  }
+
   function currentVariantOrder(family) {
-    const validIds = family.variants.map((variant) => variant.id);
+    const validIds = familyVariants(family).map((variant) => variant.id);
     const saved = Array.isArray(design.families[family.id]?.order) ? design.families[family.id].order : [];
     return [
       ...saved.filter((id,index) => validIds.includes(id) && saved.indexOf(id) === index),
@@ -168,7 +174,7 @@
   }
 
   function orderedVariants(family) {
-    const byId = new Map(family.variants.map((variant) => [variant.id,variant]));
+    const byId = new Map(familyVariants(family).map((variant) => [variant.id,variant]));
     return currentVariantOrder(family).map((id) => byId.get(id)).filter(Boolean);
   }
 
@@ -463,7 +469,7 @@
   function familyStats(family) {
     const familyInfo = familyView(family);
     if (!familyInfo.visible) return { total:0, collected:0, mastered:0 };
-    return family.variants.reduce((totals, variant) => {
+    return familyVariants(family).reduce((totals, variant) => {
       if (!variantView(family,variant).visible) return totals;
       const item = variantState(family.id,variant.id);
       totals.total += 1;
@@ -544,7 +550,7 @@
       section.classList.toggle('is-hidden-editor', !familyInfo.visible);
       const title = familyInfo.name || (editMode ? '[No group title]' : '');
       section.innerHTML = `
-        <div class="collection-tools editor-only"><button class="edit-chip edit-family-btn" type="button">Edit group</button></div>
+        <div class="collection-tools editor-only"><button class="edit-chip edit-family-btn" type="button">Edit group</button><button class="edit-chip add-variant-btn" type="button">Add box</button></div>
         <div class="collection-head">
           <h3${title ? '' : ' hidden'}>${escapeHtml(title)}</h3>
           <div class="collection-meta">
@@ -554,6 +560,11 @@
         </div>
         <div class="variant-row" aria-label="${escapeHtml(title || 'Sprite')} variants"></div>`;
       section.querySelector('.edit-family-btn').addEventListener('click', () => openFamilyEditor(family.id));
+      section.querySelector('.add-variant-btn').addEventListener('click', () => {
+        document.getElementById('newVariantFamilyId').value = family.id;
+        document.getElementById('newVariantName').value = '';
+        document.getElementById('addVariantDialog').showModal();
+      });
       const row = section.querySelector('.variant-row');
       orderedVariants(family).forEach((variant) => {
         const view = variantView(family,variant);
@@ -745,7 +756,7 @@
 
   function openVariantEditor(familyId, variantId) {
     const family = allFamilies().find((item) => item.id === familyId);
-    const variant = family?.variants.find((item) => item.id === variantId);
+    const variant = family ? familyVariants(family).find((item) => item.id === variantId) : null;
     if (!family || !variant) return;
     const view = variantView(family,variant);
     pendingVariantImage = undefined;
@@ -876,6 +887,11 @@
   document.getElementById('editHeaderBtn').addEventListener('click', openHeaderEditor);
   document.getElementById('editPageBtn').addEventListener('click', openPageEditor);
   document.getElementById('designStudioBtn').addEventListener('click', openDesignStudio);
+  document.getElementById('saveChangesBtn').addEventListener('click', () => {
+    const designSaved = saveDesign();
+    saveProgress();
+    if (designSaved) showToast('All changes saved');
+  });
   document.getElementById('addFamilyBtn').addEventListener('click', () => {
     document.getElementById('newFamilyName').value = '';
     document.getElementById('newFamilyRarity').value = activeRarity;
@@ -1105,12 +1121,55 @@
 
   document.getElementById('restoreVariantBtn').addEventListener('click', () => {
     const family = allFamilies().find((item) => item.id === document.getElementById('editVariantFamilyId').value);
-    const variant = family?.variants.find((item) => item.id === document.getElementById('editVariantId').value);
+    const variant = family ? familyVariants(family).find((item) => item.id === document.getElementById('editVariantId').value) : null;
     if (!variant) return;
     document.getElementById('editVariantName').value = variant.name;
     document.getElementById('editVariantVisible').checked = true;
     pendingVariantImage = variant.image;
     setVariantPreview(variant.image);
+  });
+
+  document.getElementById('deleteVariantBtn').addEventListener('click', () => {
+    const familyId = document.getElementById('editVariantFamilyId').value;
+    const variantId = document.getElementById('editVariantId').value;
+    const family = allFamilies().find((item) => item.id === familyId);
+    const variant = family ? familyVariants(family).find((item) => item.id === variantId) : null;
+    if (!family || !variant || !confirm(`Delete the ${variantView(family,variant).name || 'selected'} box from this group?`)) return;
+    const custom = familyCustom(familyId);
+    const addedIndex = custom.addedVariants?.findIndex((item) => item.id === variantId) ?? -1;
+    if (addedIndex >= 0) custom.addedVariants.splice(addedIndex,1);
+    else {
+      custom.variants[variantId] ||= {};
+      custom.variants[variantId].deleted = true;
+    }
+    if (Array.isArray(custom.order)) custom.order = custom.order.filter((id) => id !== variantId);
+    if (state[familyId]) delete state[familyId][variantId];
+    if (!saveDesign()) return;
+    saveProgress();
+    document.getElementById('variantEditorDialog').close();
+    renderAll();
+    showToast('Box deleted');
+  });
+
+  document.getElementById('addVariantForm').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const familyId = document.getElementById('newVariantFamilyId').value;
+    const family = allFamilies().find((item) => item.id === familyId);
+    const name = document.getElementById('newVariantName').value.trim();
+    if (!family || !name) return;
+    const custom = familyCustom(familyId);
+    custom.addedVariants ||= [];
+    const allIds = [...family.variants,...custom.addedVariants].map((variant) => variant.id);
+    const idBase = name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'new-box';
+    let id = idBase;
+    let suffix = 2;
+    while (allIds.includes(id)) id = `${idBase}-${suffix++}`;
+    custom.addedVariants.push({ id, name, image:'' });
+    custom.order = currentVariantOrder(family);
+    if (!saveDesign()) return;
+    document.getElementById('addVariantDialog').close();
+    renderAll();
+    showToast(`${name} box added`);
   });
 
   document.getElementById('variantEditorForm').addEventListener('submit', (event) => {
