@@ -351,7 +351,7 @@ window.SPRITE_DATA = [
     ]
   },
   {
-    "rarity": "Legendary",
+    "rarity": "Mythic",
     "name": "Grim",
     "id": "grim",
     "variants": [

@@ -89,6 +89,7 @@
       header:{ ...DEFAULT_HEADER, ...(stored.header || {}) },
       pages:Object.fromEntries(rarities.map((rarity) => [rarity, { ...DEFAULT_PAGES[rarity], ...(stored.pages?.[rarity] || {}) }])),
       families:stored.families && typeof stored.families === 'object' ? stored.families : {},
+      customFamilies:Array.isArray(stored.customFamilies) ? stored.customFamilies : [],
       theme:{
         ...DEFAULT_THEME,
         ...storedTheme,
@@ -131,11 +132,20 @@
     return design.families[familyId];
   }
 
+  function allFamilies() {
+    return [...baseData,...design.customFamilies];
+  }
+
+  function familyRarity(family) {
+    return design.families[family.id]?.rarity || family.rarity;
+  }
+
   function familyView(family) {
     const custom = design.families[family.id] || {};
     return {
       name:hasOwn(custom,'name') ? custom.name : family.name,
-      visible:hasOwn(custom,'visible') ? custom.visible : true
+      visible:hasOwn(custom,'visible') ? custom.visible : true,
+      deleted:Boolean(custom.deleted)
     };
   }
 
@@ -464,7 +474,7 @@
   }
 
   function rarityStats(rarity) {
-    return baseData.filter((family) => family.rarity === rarity).reduce((totals, family) => {
+    return allFamilies().filter((family) => familyRarity(family) === rarity && !familyView(family).deleted).reduce((totals, family) => {
       const stats = familyStats(family);
       totals.total += stats.total;
       totals.collected += stats.collected;
@@ -523,7 +533,7 @@
     renderText(pageDescriptionEl, page.description, '[No description]');
     checklistPage.setAttribute('aria-labelledby', `tab-${activeRarity.toLowerCase()}`);
 
-    baseData.filter((family) => family.rarity === activeRarity).forEach((family) => {
+    allFamilies().filter((family) => familyRarity(family) === activeRarity && !familyView(family).deleted).forEach((family) => {
       const familyInfo = familyView(family);
       if (!familyInfo.visible && !editMode) return;
       const stats = familyStats(family);
@@ -563,7 +573,7 @@
     masteredBarEl.style.width = `${overall.total ? overall.mastered / overall.total * 100 : 0}%`;
 
     collectionsEl.querySelectorAll('.collection').forEach((section) => {
-      const family = baseData.find((item) => item.id === section.dataset.familyId);
+      const family = allFamilies().find((item) => item.id === section.dataset.familyId);
       if (!family) return;
       const stats = familyStats(family);
       section.querySelector('.collection-count').textContent = `${stats.collected} / ${stats.total} collected`;
@@ -723,17 +733,18 @@
   }
 
   function openFamilyEditor(familyId) {
-    const family = baseData.find((item) => item.id === familyId);
+    const family = allFamilies().find((item) => item.id === familyId);
     if (!family) return;
     const view = familyView(family);
     document.getElementById('editFamilyId').value = familyId;
     document.getElementById('editFamilyName').value = view.name;
+    document.getElementById('editFamilyRarity').value = familyRarity(family);
     document.getElementById('editFamilyVisible').checked = view.visible;
     document.getElementById('familyEditorDialog').showModal();
   }
 
   function openVariantEditor(familyId, variantId) {
-    const family = baseData.find((item) => item.id === familyId);
+    const family = allFamilies().find((item) => item.id === familyId);
     const variant = family?.variants.find((item) => item.id === variantId);
     if (!family || !variant) return;
     const view = variantView(family,variant);
@@ -865,6 +876,12 @@
   document.getElementById('editHeaderBtn').addEventListener('click', openHeaderEditor);
   document.getElementById('editPageBtn').addEventListener('click', openPageEditor);
   document.getElementById('designStudioBtn').addEventListener('click', openDesignStudio);
+  document.getElementById('addFamilyBtn').addEventListener('click', () => {
+    document.getElementById('newFamilyName').value = '';
+    document.getElementById('newFamilyRarity').value = activeRarity;
+    document.getElementById('newFamilyVariants').value = 'Base, Gold, Gummy, Galaxy, Cube, Gem, Quack';
+    document.getElementById('addFamilyDialog').showModal();
+  });
 
   Object.entries(STUDIO_FIELD_MAP).forEach(([id,key]) => {
     document.getElementById(id).addEventListener('input', (event) => {
@@ -1016,11 +1033,54 @@
     const id = document.getElementById('editFamilyId').value;
     const custom = familyCustom(id);
     custom.name = document.getElementById('editFamilyName').value;
+    custom.rarity = document.getElementById('editFamilyRarity').value;
     custom.visible = document.getElementById('editFamilyVisible').checked;
     if (!saveDesign()) return;
     document.getElementById('familyEditorDialog').close();
     renderAll();
     showToast('Group updated');
+  });
+
+  document.getElementById('deleteFamilyBtn').addEventListener('click', () => {
+    const id = document.getElementById('editFamilyId').value;
+    const family = allFamilies().find((item) => item.id === id);
+    if (!family || !confirm(`Delete the entire ${familyView(family).name || 'sprite'} group? Built-in groups can be restored by resetting the design.`)) return;
+    const customIndex = design.customFamilies.findIndex((item) => item.id === id);
+    if (customIndex >= 0) design.customFamilies.splice(customIndex,1);
+    else familyCustom(id).deleted = true;
+    delete state[id];
+    if (!saveDesign()) return;
+    saveProgress();
+    document.getElementById('familyEditorDialog').close();
+    renderAll();
+    showToast('Group deleted');
+  });
+
+  document.getElementById('addFamilyForm').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const name = document.getElementById('newFamilyName').value.trim();
+    const names = document.getElementById('newFamilyVariants').value.split(',').map((item) => item.trim()).filter(Boolean);
+    if (!name || !names.length) return alert('Enter a group title and at least one sprite box.');
+    const idBase = name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'custom-group';
+    let id = `custom-${idBase}`;
+    let suffix = 2;
+    while (allFamilies().some((family) => family.id === id)) id = `custom-${idBase}-${suffix++}`;
+    const used = new Set();
+    const variants = names.map((variantName,index) => {
+      let variantId = variantName.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || `sprite-${index + 1}`;
+      const baseId = variantId;
+      let variantSuffix = 2;
+      while (used.has(variantId)) variantId = `${baseId}-${variantSuffix++}`;
+      used.add(variantId);
+      return { id:variantId, name:variantName, image:'' };
+    });
+    const rarity = document.getElementById('newFamilyRarity').value;
+    design.customFamilies.push({ id, name, rarity, variants });
+    if (!saveDesign()) return;
+    activeRarity = rarity;
+    document.getElementById('addFamilyDialog').close();
+    renderAll();
+    showToast(`${name} group added`);
   });
 
   document.getElementById('editVariantImage').addEventListener('change', async (event) => {
@@ -1044,7 +1104,7 @@
   });
 
   document.getElementById('restoreVariantBtn').addEventListener('click', () => {
-    const family = baseData.find((item) => item.id === document.getElementById('editVariantFamilyId').value);
+    const family = allFamilies().find((item) => item.id === document.getElementById('editVariantFamilyId').value);
     const variant = family?.variants.find((item) => item.id === document.getElementById('editVariantId').value);
     if (!variant) return;
     document.getElementById('editVariantName').value = variant.name;

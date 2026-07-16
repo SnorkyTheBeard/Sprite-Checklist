@@ -31,8 +31,10 @@ Visual editing
    The regular image picker remains available for phones and tablets.
 11. Every row includes editable Cube, Gem, and Quack boxes. They start empty so you can add your own art.
 12. Reorder boxes independently in Edit Mode. On a computer, drag the Move handle and drop on the left or right side of another box. On a phone or tablet, use the left and right arrow buttons. Each row remembers its own order.
-13. Hidden sprites and groups remain visible in Edit Mode so they can be restored later.
-14. Use Export backup before moving devices or making large changes. Import backup restores the complete design, custom art, fonts, row order, and checklist progress.
+13. Select Add sprite group to create a future group, choose its rarity, and enter any comma-separated starting boxes you need.
+14. Edit group can rename or reclassify a group, hide it temporarily, or delete the entire group after confirmation.
+15. Hidden sprites and groups remain visible in Edit Mode so they can be restored later.
+16. Use Export backup before moving devices or making large changes. Import backup restores the complete design, custom groups, custom art, fonts, row order, and checklist progress.
 
 Notes
 - Mastering a sprite also marks it collected.

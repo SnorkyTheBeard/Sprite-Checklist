@@ -40,6 +40,7 @@
       <button id="editModeBtn" class="edit-mode-btn" type="button" aria-pressed="false">Edit Mode</button>
       <div class="editor-tools editor-only">
         <button id="designStudioBtn" type="button">Design Studio</button>
+        <button id="addFamilyBtn" type="button">Add sprite group</button>
         <button id="exportBtn" type="button">Export backup</button>
         <button id="importBtn" type="button">Import backup</button>
         <button id="resetDesignBtn" type="button">Reset design</button>
@@ -250,9 +251,24 @@
       <div class="dialog-body">
         <input id="editFamilyId" type="hidden">
         <label>Group title<input id="editFamilyName" type="text"></label>
+        <label>Classification<select id="editFamilyRarity"><option>Rare</option><option>Epic</option><option>Legendary</option><option>Mythic</option></select></label>
         <label class="check-field"><input id="editFamilyVisible" type="checkbox"> Show this group in the checklist</label>
         <p class="field-help">Hidden groups remain available while Edit Mode is on so you can restore them.</p>
+        <button id="deleteFamilyBtn" class="danger-btn wide-action" type="button">Delete this entire group</button>
         <div class="dialog-actions"><button type="button" data-close-dialog>Cancel</button><button class="primary-btn" type="submit">Save group</button></div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="addFamilyDialog" class="editor-dialog">
+    <form id="addFamilyForm">
+      <div class="dialog-head"><h2>Add sprite group</h2><button class="icon-close" type="button" data-close-dialog aria-label="Close">×</button></div>
+      <div class="dialog-body">
+        <label>Group title<input id="newFamilyName" type="text" required placeholder="New sprite name"></label>
+        <label>Classification<select id="newFamilyRarity"><option>Rare</option><option>Epic</option><option>Legendary</option><option>Mythic</option></select></label>
+        <label>Starting boxes<input id="newFamilyVariants" type="text" value="Base, Gold, Gummy, Galaxy, Cube, Gem, Quack"></label>
+        <p class="field-help">Separate box names with commas. Every box starts empty and can receive your artwork in Edit Mode.</p>
+        <div class="dialog-actions"><button type="button" data-close-dialog>Cancel</button><button class="primary-btn" type="submit">Add group</button></div>
       </div>
     </form>
   </dialog>
