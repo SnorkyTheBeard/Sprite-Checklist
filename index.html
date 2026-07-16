@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#111342">
-  <meta name="description" content="A mobile-friendly Fortnite Sprite collection tracker with collected and mastered progress.">
+  <meta name="description" content="A visually editable Fortnite Sprite checklist with collected and mastered progress.">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Galaxy Sprite Checklist</title>
@@ -16,35 +16,49 @@
   <a class="skip-link" href="#collections">Skip to checklist</a>
 
   <div class="app-shell">
-    <header class="hero">
-      <p class="kicker">Fortnite Collection Tracker</p>
-      <h1>Galaxy Sprite Checklist</h1>
-      <p class="sub">Tap a sprite to mark it collected. Tap its crown when it is mastered.</p>
+    <header class="hero" id="hero">
+      <button class="edit-chip editor-only" id="editHeaderBtn" type="button">Edit header</button>
+      <p class="kicker" id="heroKicker">Fortnite Collection Tracker</p>
+      <h1 id="heroTitle">Galaxy Sprite Checklist</h1>
+      <p class="sub" id="heroSubtitle">Tap a sprite to mark it collected. Tap its crown when it is mastered.</p>
 
       <div class="summary" role="group" aria-label="Overall progress">
         <div>
           <strong id="collectedTotal">0 / 0</strong>
-          <span>Collected</span>
+          <span id="collectedLabel">Collected</span>
           <span class="progress-track" aria-hidden="true"><i id="collectedBar"></i></span>
         </div>
         <div>
           <strong id="masteredTotal">0 / 0</strong>
-          <span>Mastered</span>
+          <span id="masteredLabel">Mastered</span>
           <span class="progress-track" aria-hidden="true"><i id="masteredBar"></i></span>
         </div>
       </div>
     </header>
+
+    <section class="editor-dock" aria-label="Visual editor">
+      <button id="editModeBtn" class="edit-mode-btn" type="button" aria-pressed="false">Edit Mode</button>
+      <div class="editor-tools editor-only">
+        <button id="exportBtn" type="button">Export backup</button>
+        <button id="importBtn" type="button">Import backup</button>
+        <button id="resetDesignBtn" type="button">Reset design</button>
+        <input id="importFile" class="visually-hidden" type="file" accept="application/json,.json">
+      </div>
+    </section>
 
     <nav class="rarity-tabs" id="rarityTabs" aria-label="Sprite rarity pages" role="tablist"></nav>
 
     <main id="checklistPage" role="tabpanel" aria-labelledby="activePageTitle">
       <header class="page-head">
         <div>
-          <p class="page-eyebrow">Checklist page</p>
+          <p class="page-eyebrow" id="pageEyebrow">Checklist page</p>
           <h2 id="activePageTitle">Rare Sprites</h2>
           <p id="pageDescription">Track every available variant in this rarity.</p>
         </div>
-        <strong class="page-count" id="pageCount">0 / 0</strong>
+        <div class="page-actions">
+          <button class="edit-chip editor-only" id="editPageBtn" type="button">Edit page</button>
+          <strong class="page-count" id="pageCount">0 / 0</strong>
+        </div>
       </header>
 
       <div id="collections"></div>
@@ -52,10 +66,75 @@
     </main>
 
     <footer>
-      <p>Progress is saved on this device.</p>
+      <p id="footerNote">Progress is saved on this device.</p>
       <button id="resetBtn" class="reset-btn" type="button">Reset all progress</button>
     </footer>
   </div>
+
+  <dialog id="headerEditorDialog" class="editor-dialog">
+    <form id="headerEditorForm">
+      <div class="dialog-head"><h2>Edit header</h2><button class="icon-close" type="button" data-close-dialog aria-label="Close">×</button></div>
+      <div class="dialog-body">
+        <label>Kicker text<input id="editKicker" type="text"></label>
+        <label>Main title<input id="editTitle" type="text"></label>
+        <label>Instructions<textarea id="editSubtitle" rows="3"></textarea></label>
+        <div class="field-grid">
+          <label>Collected label<input id="editCollectedLabel" type="text"></label>
+          <label>Mastered label<input id="editMasteredLabel" type="text"></label>
+        </div>
+        <label>Footer note<input id="editFooterNote" type="text"></label>
+        <label class="check-field"><input id="editShowSummary" type="checkbox"> Show progress summary</label>
+        <p class="field-help">Leave any text box empty to remove that text from the page.</p>
+        <div class="dialog-actions"><button type="button" data-close-dialog>Cancel</button><button class="primary-btn" type="submit">Save header</button></div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="pageEditorDialog" class="editor-dialog">
+    <form id="pageEditorForm">
+      <div class="dialog-head"><h2>Edit rarity page</h2><button class="icon-close" type="button" data-close-dialog aria-label="Close">×</button></div>
+      <div class="dialog-body">
+        <label>Small heading<input id="editPageEyebrow" type="text"></label>
+        <label>Page title<input id="editPageTitle" type="text"></label>
+        <label>Page description<textarea id="editPageDescription" rows="3"></textarea></label>
+        <p class="field-help">These changes apply only to the rarity page currently open.</p>
+        <div class="dialog-actions"><button type="button" data-close-dialog>Cancel</button><button class="primary-btn" type="submit">Save page</button></div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="familyEditorDialog" class="editor-dialog">
+    <form id="familyEditorForm">
+      <div class="dialog-head"><h2>Edit sprite group</h2><button class="icon-close" type="button" data-close-dialog aria-label="Close">×</button></div>
+      <div class="dialog-body">
+        <input id="editFamilyId" type="hidden">
+        <label>Group title<input id="editFamilyName" type="text"></label>
+        <label class="check-field"><input id="editFamilyVisible" type="checkbox"> Show this group in the checklist</label>
+        <p class="field-help">Hidden groups remain available while Edit Mode is on so you can restore them.</p>
+        <div class="dialog-actions"><button type="button" data-close-dialog>Cancel</button><button class="primary-btn" type="submit">Save group</button></div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="variantEditorDialog" class="editor-dialog">
+    <form id="variantEditorForm">
+      <div class="dialog-head"><h2>Edit sprite</h2><button class="icon-close" type="button" data-close-dialog aria-label="Close">×</button></div>
+      <div class="dialog-body">
+        <input id="editVariantFamilyId" type="hidden">
+        <input id="editVariantId" type="hidden">
+        <label>Sprite label<input id="editVariantName" type="text"></label>
+        <label>Replace image<input id="editVariantImage" type="file" accept="image/*"></label>
+        <div class="editor-preview"><img id="variantImagePreview" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Current sprite preview"></div>
+        <div class="inline-actions">
+          <button id="removeVariantImageBtn" type="button">Remove image</button>
+          <button id="restoreVariantBtn" type="button">Restore original</button>
+        </div>
+        <label class="check-field"><input id="editVariantVisible" type="checkbox"> Show this sprite in the checklist</label>
+        <p class="field-help">Large uploads are resized before saving. Changes stay on this device unless you export a backup.</p>
+        <div class="dialog-actions"><button type="button" data-close-dialog>Cancel</button><button class="primary-btn" type="submit">Save sprite</button></div>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="resetDialog" class="reset-dialog">
     <form method="dialog">

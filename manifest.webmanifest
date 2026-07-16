@@ -1,7 +1,7 @@
 {
   "name": "Galaxy Sprite Checklist",
   "short_name": "Sprite Checklist",
-  "description": "A mobile-friendly Fortnite Sprite collection tracker with collected and mastered progress.",
+  "description": "A visually editable Fortnite Sprite checklist with collected and mastered progress.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
