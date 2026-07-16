@@ -285,6 +285,8 @@ footer { text-align:center; padding-top:4px; color:#aaa5c8; font-size:12px; }
 .dialog-actions .danger-btn { color:#fff; border-color:#d86475; background:#872f44; }
 .wide-action { width:100%; min-height:44px; margin-top:8px; padding:10px 15px; border:1px solid #d86475; border-radius:14px; color:#fff; background:#872f44; font-weight:900; cursor:pointer; }
 .secondary-wide { width:100%; min-height:42px; margin:-4px 0 10px; padding:9px 13px; border:1px solid rgba(255,255,255,.2); border-radius:12px; color:#fff; background:#252552; font-weight:850; cursor:pointer; }
+.publish-ready { margin:0 0 6px; font-size:18px; font-weight:950; }
+.publish-file-link { min-height:50px; display:flex; align-items:center; justify-content:center; margin:16px 0 12px; padding:12px; border:1px solid #ffe398; border-radius:14px; color:#241700; background:linear-gradient(180deg,#ffe996,#ffbf45); font-weight:950; text-align:center; text-decoration:none; overflow-wrap:anywhere; }
 .editor-dialog form { display:flex; flex-direction:column; max-height:min(90vh,760px); margin:0; }
 .dialog-head { position:sticky; top:0; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:16px 18px; border-bottom:1px solid rgba(255,255,255,.12); background:#17173f; }
 .dialog-head h2 { margin:0; font-size:21px; }
