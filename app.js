@@ -3,6 +3,7 @@
 
   const PROGRESS_KEY = 'galaxy_sprite_tracker_progress_v1';
   const DESIGN_KEY = 'galaxy_sprite_tracker_design_v1';
+  const REORDER_MIME = 'application/x-sprite-variant-order';
   const baseData = Array.isArray(window.SPRITE_DATA) ? window.SPRITE_DATA : [];
   const rarities = ['Rare','Epic','Legendary','Mythic'].filter((rarity) => baseData.some((family) => family.rarity === rarity));
   const defaultRarity = rarities[0] || 'Rare';
@@ -147,6 +148,47 @@
     };
   }
 
+  function currentVariantOrder(family) {
+    const validIds = family.variants.map((variant) => variant.id);
+    const saved = Array.isArray(design.families[family.id]?.order) ? design.families[family.id].order : [];
+    return [
+      ...saved.filter((id,index) => validIds.includes(id) && saved.indexOf(id) === index),
+      ...validIds.filter((id) => !saved.includes(id))
+    ];
+  }
+
+  function orderedVariants(family) {
+    const byId = new Map(family.variants.map((variant) => [variant.id,variant]));
+    return currentVariantOrder(family).map((id) => byId.get(id)).filter(Boolean);
+  }
+
+  function saveVariantOrder(family, order) {
+    familyCustom(family.id).order = order;
+    if (!saveDesign()) return false;
+    renderAll();
+    showToast(`${familyView(family).name || 'Sprite'} order updated`);
+    return true;
+  }
+
+  function moveVariant(family, variantId, offset) {
+    const order = currentVariantOrder(family);
+    const from = order.indexOf(variantId);
+    const to = Math.max(0,Math.min(order.length - 1,from + offset));
+    if (from < 0 || from === to) return;
+    order.splice(to,0,...order.splice(from,1));
+    saveVariantOrder(family,order);
+  }
+
+  function reorderVariant(family, sourceId, targetId, placeAfter) {
+    const order = currentVariantOrder(family);
+    const from = order.indexOf(sourceId);
+    if (from < 0 || !order.includes(targetId) || sourceId === targetId) return;
+    order.splice(from,1);
+    const targetIndex = order.indexOf(targetId);
+    order.splice(targetIndex + (placeAfter ? 1 : 0),0,sourceId);
+    saveVariantOrder(family,order);
+  }
+
   function variantState(familyId, variantId) {
     state[familyId] ||= {};
     state[familyId][variantId] ||= { collected:false, mastered:false };
@@ -267,6 +309,8 @@
       : '';
     card.classList.toggle('image-missing', !view.image);
 
+    const order = currentVariantOrder(family);
+    const orderIndex = order.indexOf(variant.id);
     card.innerHTML = `
       <button class="edit-chip editor-only edit-variant-btn" type="button">Edit sprite</button>
       <button class="crown-button" type="button" aria-pressed="false">${crownSvg()}</button>
@@ -277,6 +321,11 @@
           <span class="check-badge" aria-hidden="true">✓</span>
         </button>
         <span class="drop-hint editor-only" aria-hidden="true">Drop image here</span>
+      </div>
+      <div class="variant-move-tools editor-only" aria-label="Reorder ${escapeHtml(displayName || 'sprite')} box">
+        <button class="move-step move-left-btn" type="button" aria-label="Move ${escapeHtml(displayName || 'sprite')} left"${orderIndex === 0 ? ' disabled' : ''}>←</button>
+        <button class="move-handle" type="button" draggable="true" aria-label="Drag ${escapeHtml(displayName || 'sprite')} to reorder">Move</button>
+        <button class="move-step move-right-btn" type="button" aria-label="Move ${escapeHtml(displayName || 'sprite')} right"${orderIndex === order.length - 1 ? ' disabled' : ''}>→</button>
       </div>
       <h4${displayName ? '' : ' hidden'}>${escapeHtml(displayName)}</h4>
       <button class="collect-button" type="button" aria-pressed="false"><span class="box" aria-hidden="true"></span><span>${escapeHtml(design.header.collectedLabel || 'Collected')}</span></button>
@@ -304,6 +353,43 @@
       commitCardChange(card, family, variant, current, current.mastered ? 'Mastered' : 'Mastery removed');
     });
     card.querySelector('.edit-variant-btn').addEventListener('click', () => openVariantEditor(family.id, variant.id));
+    card.querySelector('.move-left-btn').addEventListener('click', () => moveVariant(family,variant.id,-1));
+    card.querySelector('.move-right-btn').addEventListener('click', () => moveVariant(family,variant.id,1));
+
+    const moveHandle = card.querySelector('.move-handle');
+    moveHandle.addEventListener('dragstart', (event) => {
+      if (!editMode) return event.preventDefault();
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData(REORDER_MIME,JSON.stringify({ familyId:family.id, variantId:variant.id }));
+      card.classList.add('is-reordering');
+    });
+    moveHandle.addEventListener('dragend', () => {
+      document.querySelectorAll('.card').forEach((item) => item.classList.remove('is-reordering','reorder-before','reorder-after'));
+    });
+    card.addEventListener('dragover', (event) => {
+      if (!editMode || ![...event.dataTransfer.types].includes(REORDER_MIME)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      const placeAfter = event.clientX > card.getBoundingClientRect().left + card.offsetWidth / 2;
+      card.classList.toggle('reorder-before',!placeAfter);
+      card.classList.toggle('reorder-after',placeAfter);
+    });
+    card.addEventListener('dragleave', (event) => {
+      if (!card.contains(event.relatedTarget)) card.classList.remove('reorder-before','reorder-after');
+    });
+    card.addEventListener('drop', (event) => {
+      if (!editMode || ![...event.dataTransfer.types].includes(REORDER_MIME)) return;
+      event.preventDefault();
+      card.classList.remove('reorder-before','reorder-after');
+      try {
+        const source = JSON.parse(event.dataTransfer.getData(REORDER_MIME));
+        if (source.familyId !== family.id) return showToast('Boxes can only move within their own row.');
+        const placeAfter = event.clientX > card.getBoundingClientRect().left + card.offsetWidth / 2;
+        reorderVariant(family,source.variantId,variant.id,placeAfter);
+      } catch {
+        showToast('That box could not be moved.');
+      }
+    });
 
     const imageWrap = card.querySelector('.image-wrap');
     imageWrap.addEventListener('dragenter', (event) => {
@@ -459,7 +545,7 @@
         <div class="variant-row" aria-label="${escapeHtml(title || 'Sprite')} variants"></div>`;
       section.querySelector('.edit-family-btn').addEventListener('click', () => openFamilyEditor(family.id));
       const row = section.querySelector('.variant-row');
-      family.variants.forEach((variant) => {
+      orderedVariants(family).forEach((variant) => {
         const view = variantView(family,variant);
         if (view.visible || editMode) row.appendChild(makeCard(family,variant));
       });

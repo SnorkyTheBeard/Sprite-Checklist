@@ -228,6 +228,16 @@ body.edit-mode .is-hidden-editor::after { content:"Hidden"; position:absolute; i
   transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease;
 }
 .card > .edit-chip { position:absolute; z-index:9; top:6px; left:6px; min-height:34px; padding:5px 8px; color:#33234e; border-color:rgba(90,63,125,.3); background:rgba(255,255,255,.92); font-size:10px; }
+.variant-move-tools { align-items:center; gap:5px; margin-top:7px; }
+.variant-move-tools button { min-height:38px; border:1px solid rgba(90,63,125,.3); border-radius:10px; color:#33234e; background:rgba(255,255,255,.92); font-weight:950; cursor:pointer; }
+.variant-move-tools .move-step { width:38px; flex:none; font-size:18px; }
+.variant-move-tools .move-handle { flex:1; cursor:grab; touch-action:none; }
+.variant-move-tools .move-handle:active { cursor:grabbing; }
+.variant-move-tools button:disabled { opacity:.35; cursor:not-allowed; }
+.card.is-reordering { opacity:.48; }
+.card.reorder-before::before,.card.reorder-after::after { content:""; position:absolute; z-index:12; top:4px; bottom:4px; width:5px; border-radius:5px; background:var(--theme-accent); box-shadow:0 0 10px var(--theme-accent); }
+.card.reorder-before::before { left:-7px; }
+.card.reorder-after::after { right:-7px; }
 .card.collected { border-color:#45bdf8; box-shadow:0 0 0 2px rgba(78,191,255,.16),0 8px 18px rgba(79,54,97,.16); }
 .card.mastered { border-color:var(--gold); box-shadow:0 0 0 2px rgba(255,212,95,.22),0 0 20px rgba(255,193,50,.25); }
 .image-wrap { position:relative; aspect-ratio:1; display:grid; place-items:center; border-radius:16px; background-color:var(--theme-well-bg); background-image:var(--theme-well-image); background-position:center; background-size:var(--theme-well-size,cover); background-repeat:var(--theme-well-repeat,no-repeat); border:1px solid var(--theme-well-border); overflow:hidden; }

@@ -29,8 +29,10 @@ Visual editing
 10. Sprite images can be replaced from the phone or computer, removed, or restored.
    On a computer, you can also drag a PNG, JPG, WebP, GIF, or AVIF directly onto any sprite image box while Edit Mode is on. The highlighted box resizes and saves it automatically.
    The regular image picker remains available for phones and tablets.
-11. Hidden sprites and groups remain visible in Edit Mode so they can be restored later.
-12. Use Export backup before moving devices or making large changes. Import backup restores the complete design, custom art, fonts, and checklist progress.
+11. Every row includes editable Cube, Gem, and Quack boxes. They start empty so you can add your own art.
+12. Reorder boxes independently in Edit Mode. On a computer, drag the Move handle and drop on the left or right side of another box. On a phone or tablet, use the left and right arrow buttons. Each row remembers its own order.
+13. Hidden sprites and groups remain visible in Edit Mode so they can be restored later.
+14. Use Export backup before moving devices or making large changes. Import backup restores the complete design, custom art, fonts, row order, and checklist progress.
 
 Notes
 - Mastering a sprite also marks it collected.

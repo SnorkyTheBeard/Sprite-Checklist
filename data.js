@@ -418,3 +418,14 @@ window.SPRITE_DATA = [
   }
 ];
 
+// These editable slots intentionally start without artwork so creators can add
+// their own Cube, Gem, and Quack images from Edit Mode.
+window.SPRITE_DATA.forEach((family) => {
+  [
+    { id:'cube', name:'Cube', image:'' },
+    { id:'gem', name:'Gem', image:'' },
+    { id:'quack', name:'Quack', image:'' }
+  ].forEach((variant) => {
+    if (!family.variants.some((item) => item.id === variant.id)) family.variants.push({ ...variant });
+  });
+});
