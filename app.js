@@ -16,6 +16,7 @@
     subtitle:'Tap a sprite to mark it collected. Tap its crown when it is mastered.',
     collectedLabel:'Collected',
     masteredLabel:'Mastered',
+    masterPrompt:'Tap crown to master',
     footerNote:'Progress is saved on this device.',
     showSummary:true
   };
@@ -40,7 +41,7 @@
     bodyFont:'system', headingFont:'system', buttonFont:'system', customFontData:'', customFontName:'',
     baseSize:16, titleSize:48, pageTitleSize:34, groupTitleSize:20, spriteLabelSize:16, checklistButtonSize:16, textColor:'#ffffff', mutedColor:'#c8c3e5',
     bodyBgColor:'#080a24', bodyBgImage:'', bodyBgMode:'cover', useBuiltInBodyArt:true, showStars:true,
-    headerBgColor:'#21184d', headerBgImage:'', headerBgMode:'cover', headerTextColor:'#ffffff', headerBorderColor:'#564d80', headerRadius:24, headerOpacity:90,
+    headerBgColor:'#21184d', headerBgImage:'', headerBgMode:'cover', headerTextColor:'#ffffff', headerBorderColor:'#564d80', headerRadius:24, headerOpacity:90, headerHeight:0,
     collectionBgColor:'#f3dfb4', collectionBgImage:'', collectionBgMode:'cover', useBuiltInCollectionArt:true, collectionTextColor:'#2a2144', collectionBorderColor:'#ffe097', collectionRadius:24,
     cardBgColor:'#fffaf0', cardBgImage:'', cardBgMode:'cover', cardTextColor:'#33234e', cardBorderColor:'#bca8cf', cardRadius:20,
     wellBgColor:'#e7ddfa', wellBgImage:'', wellBgMode:'cover', useBuiltInWellArt:true, wellBorderColor:'#b9a8d5',
@@ -60,6 +61,7 @@
   let pendingVariantCardImage;
   let pendingFamilyBgImage;
   let pendingPageBgImage;
+  let pendingHeaderBgImage;
   let publishedDesignFile;
   let publishedDesignContents = '';
   let publishedDesignUrl;
@@ -82,6 +84,11 @@
   const masteredBarEl = document.getElementById('masteredBar');
   const resetDialog = document.getElementById('resetDialog');
   const statusToast = document.getElementById('statusToast');
+  const spriteSearchForm = document.getElementById('spriteSearchForm');
+  const spriteSearchInput = document.getElementById('spriteSearchInput');
+  const spriteSearchResults = document.getElementById('spriteSearchResults');
+  const spriteSearchStatus = document.getElementById('spriteSearchStatus');
+  const clearSpriteSearchBtn = document.getElementById('clearSpriteSearchBtn');
 
   try { ownerUnlocked = localStorage.getItem(OWNER_UNLOCK_KEY) === 'yes'; } catch {}
 
@@ -314,6 +321,7 @@
     root.style.setProperty('--theme-header-border',theme.headerBorderColor);
     root.style.setProperty('--theme-header-radius',`${theme.headerRadius}px`);
     root.style.setProperty('--theme-header-opacity',`${theme.headerOpacity}%`);
+    root.style.setProperty('--theme-header-height',`${theme.headerHeight}px`);
     root.style.setProperty('--theme-collection-bg',theme.collectionBgColor);
     root.style.setProperty('--theme-collection-text',theme.collectionTextColor);
     root.style.setProperty('--theme-collection-border',theme.collectionBorderColor);
@@ -396,7 +404,7 @@
       </div>
       <h4${displayName ? '' : ' hidden'}>${escapeHtml(displayName)}</h4>
       <button class="collect-button" type="button" aria-pressed="false"><span class="box" aria-hidden="true"></span><span>${escapeHtml(design.header.collectedLabel || 'Collected')}</span></button>
-      <div class="master-label">Tap crown to master</div>`;
+      <div class="master-label">${escapeHtml(design.header.masterPrompt)}</div>`;
 
     const image = card.querySelector('img');
     image?.addEventListener('error', () => {
@@ -507,7 +515,10 @@
     card.querySelector('.collect-button').setAttribute('aria-pressed', String(current.collected));
     card.querySelector('.crown-button').setAttribute('aria-label', masteredAction);
     card.querySelector('.crown-button').setAttribute('aria-pressed', String(current.mastered));
-    card.querySelector('.master-label').textContent = current.mastered ? (design.header.masteredLabel || 'Mastered') : 'Tap crown to master';
+    const masterLabel = card.querySelector('.master-label');
+    const masterText = current.mastered ? design.header.masteredLabel : design.header.masterPrompt;
+    masterLabel.textContent = masterText || '';
+    masterLabel.hidden = !masterText;
   }
 
   function commitCardChange(card, family, variant, current, message) {
@@ -619,6 +630,7 @@
       });
       const row = section.querySelector('.variant-row');
       let rowGesture = null;
+      let rowGlideFrame = 0;
       let suppressRowClickUntil = 0;
       const findTouch = (list,id) => {
         for (let index = 0; index < list.length; index += 1) if (list[index].identifier === id) return list[index];
@@ -626,8 +638,15 @@
       };
       row.addEventListener('touchstart', (event) => {
         if (event.touches.length !== 1) return;
+        const stoppedActiveGlide = Boolean(rowGlideFrame);
+        if (stoppedActiveGlide) {
+          cancelAnimationFrame(rowGlideFrame);
+          suppressRowClickUntil = Date.now() + 450;
+        }
+        rowGlideFrame = 0;
+        row.classList.remove('is-touch-dragging');
         const touch = event.touches[0];
-        rowGesture = { id:touch.identifier, x:touch.clientX, y:touch.clientY, scrollLeft:row.scrollLeft, horizontal:false };
+        rowGesture = { id:touch.identifier, x:touch.clientX, y:touch.clientY, lastX:touch.clientX, lastTime:performance.now(), velocity:0, horizontal:false, stoppedActiveGlide };
       }, { passive:true });
       row.addEventListener('touchmove', (event) => {
         if (!rowGesture) return;
@@ -645,16 +664,52 @@
           row.classList.add('is-touch-dragging');
         }
         event.preventDefault();
-        row.scrollLeft = rowGesture.scrollLeft - dx;
+        const now = performance.now();
+        const elapsed = Math.max(1,now - rowGesture.lastTime);
+        const movement = touch.clientX - rowGesture.lastX;
+        const instantVelocity = Math.max(-1.4,Math.min(1.4,-movement / elapsed));
+        rowGesture.velocity = rowGesture.velocity * .58 + instantVelocity * .42;
+        row.scrollLeft -= movement;
+        rowGesture.lastX = touch.clientX;
+        rowGesture.lastTime = now;
       }, { passive:false });
-      const endRowGesture = (event) => {
-        if (!rowGesture || !findTouch(event.changedTouches,rowGesture.id)) return;
-        if (rowGesture.horizontal) suppressRowClickUntil = Date.now() + 350;
-        rowGesture = null;
+      const stopRowGlide = () => {
+        rowGlideFrame = 0;
         row.classList.remove('is-touch-dragging');
       };
+      const glideRow = (startingVelocity) => {
+        if (Math.abs(startingVelocity) < .06 || matchMedia('(prefers-reduced-motion: reduce)').matches) return stopRowGlide();
+        const speed = Math.min(.62,Math.max(.18,Math.abs(startingVelocity) * .46));
+        const velocity = Math.sign(startingVelocity) * speed;
+        row.classList.add('is-touch-dragging');
+        let previous = performance.now();
+        const step = (now) => {
+          const elapsed = Math.min(34,Math.max(1,now - previous));
+          previous = now;
+          const before = row.scrollLeft;
+          const maxScroll = Math.max(0,row.scrollWidth - row.clientWidth);
+          row.scrollLeft = Math.max(0,Math.min(maxScroll,before + velocity * elapsed));
+          const reachedStart = velocity < 0 && row.scrollLeft <= .5;
+          const reachedEnd = velocity > 0 && row.scrollLeft >= maxScroll - .5;
+          if (reachedStart || reachedEnd || Math.abs(row.scrollLeft - before) < .05) stopRowGlide();
+          else rowGlideFrame = requestAnimationFrame(step);
+        };
+        rowGlideFrame = requestAnimationFrame(step);
+      };
+      const endRowGesture = (event) => {
+        if (!rowGesture || !findTouch(event.changedTouches,rowGesture.id)) return;
+        if (rowGesture.horizontal) {
+          suppressRowClickUntil = Date.now() + 450;
+          glideRow(rowGesture.velocity);
+        } else row.classList.remove('is-touch-dragging');
+        rowGesture = null;
+      };
       row.addEventListener('touchend',endRowGesture,{ passive:true });
-      row.addEventListener('touchcancel',endRowGesture,{ passive:true });
+      row.addEventListener('touchcancel', (event) => {
+        if (!rowGesture || !findTouch(event.changedTouches,rowGesture.id)) return;
+        rowGesture = null;
+        stopRowGlide();
+      }, { passive:true });
       row.addEventListener('click', (event) => {
         if (Date.now() < suppressRowClickUntil) {
           event.preventDefault();
@@ -723,6 +778,112 @@
     if (options.announce && changed) showToast(`${rarity} page`);
   }
 
+  function normalizeSearchText(value) {
+    return String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  }
+
+  function searchableSprites() {
+    return allFamilies().flatMap((family) => {
+      const group = familyView(family);
+      if (group.deleted || !group.visible) return [];
+      const rarity = familyRarity(family);
+      return orderedVariants(family).flatMap((variant) => {
+        const view = variantView(family,variant);
+        if (view.deleted || !view.visible) return [];
+        const groupName = group.name || 'Unnamed sprite';
+        const variantName = view.name || 'Unnamed variant';
+        return [{
+          familyId:family.id,
+          variantId:variant.id,
+          rarity,
+          groupName,
+          variantName,
+          searchText:normalizeSearchText(`${groupName} ${variantName} ${rarity}`)
+        }];
+      });
+    });
+  }
+
+  function findSpriteMatches(query) {
+    const normalized = normalizeSearchText(query);
+    if (!normalized) return [];
+    const tokens = normalized.split(' ');
+    return searchableSprites().filter((entry) => tokens.every((token) => entry.searchText.includes(token))).map((entry) => {
+      const group = normalizeSearchText(entry.groupName);
+      const variant = normalizeSearchText(entry.variantName);
+      const combined = `${group} ${variant}`;
+      const score = variant === normalized ? 0 : (group === normalized ? 1 : (combined.startsWith(normalized) ? 2 : 3));
+      return { ...entry, score };
+    }).sort((a,b) => a.score - b.score || a.groupName.localeCompare(b.groupName) || a.variantName.localeCompare(b.variantName)).slice(0,12);
+  }
+
+  function spriteSearchState(entry) {
+    const current = state[entry.familyId]?.[entry.variantId] || {};
+    if (current.mastered) return design.header.masteredLabel || 'Mastered';
+    if (current.collected) return design.header.collectedLabel || 'In collection';
+    return 'Not collected';
+  }
+
+  function closeSpriteSearchResults() {
+    spriteSearchResults.hidden = true;
+    spriteSearchInput.setAttribute('aria-expanded','false');
+  }
+
+  function openSpriteSearchResult(entry) {
+    closeSpriteSearchResults();
+    spriteSearchInput.blur();
+    switchRarity(entry.rarity,{ historyMode:'push' });
+    requestAnimationFrame(() => {
+      const card = [...document.querySelectorAll('.card')].find((item) => item.dataset.familyId === entry.familyId && item.dataset.variantId === entry.variantId);
+      if (!card) return showToast('That sprite is currently hidden.');
+      const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      card.scrollIntoView({ behavior:reducedMotion ? 'auto' : 'smooth', block:'center', inline:'center' });
+      card.classList.add('search-target');
+      setTimeout(() => card.classList.remove('search-target'),2600);
+      card.querySelector('.collect-button')?.focus({ preventScroll:true });
+      const message = `${entry.groupName} — ${entry.variantName} on the ${entry.rarity} page`;
+      spriteSearchStatus.textContent = message;
+      showToast(message);
+    });
+  }
+
+  function renderSpriteSearchResults() {
+    const query = spriteSearchInput.value.trim();
+    clearSpriteSearchBtn.hidden = !query;
+    spriteSearchResults.replaceChildren();
+    if (!query) return closeSpriteSearchResults();
+    const matches = findSpriteMatches(query);
+    if (!matches.length) {
+      const empty = document.createElement('p');
+      empty.className = 'sprite-search-empty';
+      empty.textContent = 'No matching sprites';
+      spriteSearchResults.appendChild(empty);
+    } else {
+      matches.forEach((entry) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'sprite-search-result';
+        button.setAttribute('role','option');
+        const text = document.createElement('span');
+        const title = document.createElement('strong');
+        title.textContent = `${entry.groupName} — ${entry.variantName}`;
+        const detail = document.createElement('small');
+        detail.textContent = `${entry.rarity} sprite`;
+        text.append(title,detail);
+        const status = document.createElement('span');
+        status.className = 'sprite-search-result-status';
+        status.textContent = spriteSearchState(entry);
+        button.append(text,status);
+        button.addEventListener('click', () => openSpriteSearchResult(entry));
+        spriteSearchResults.appendChild(button);
+      });
+    }
+    spriteSearchResults.hidden = false;
+    spriteSearchInput.setAttribute('aria-expanded','true');
+    spriteSearchStatus.textContent = `${matches.length} matching sprite${matches.length === 1 ? '' : 's'}`;
+    return matches;
+  }
+
   function showToast(message) {
     clearTimeout(toastTimer);
     statusToast.textContent = message;
@@ -734,7 +895,7 @@
     themeBodyFont:'bodyFont', themeHeadingFont:'headingFont', themeButtonFont:'buttonFont',
     themeBaseSize:'baseSize', themeTitleSize:'titleSize', themePageTitleSize:'pageTitleSize', themeGroupTitleSize:'groupTitleSize', themeSpriteLabelSize:'spriteLabelSize', themeChecklistButtonSize:'checklistButtonSize', themeTextColor:'textColor', themeMutedColor:'mutedColor',
     themeBodyBgColor:'bodyBgColor', themeBodyBgMode:'bodyBgMode', themeUseBuiltInBodyArt:'useBuiltInBodyArt', themeShowStars:'showStars',
-    themeHeaderBgColor:'headerBgColor', themeHeaderTextColor:'headerTextColor', themeHeaderBorderColor:'headerBorderColor', themeHeaderRadius:'headerRadius', themeHeaderOpacity:'headerOpacity', themeHeaderBgMode:'headerBgMode',
+    themeHeaderBgColor:'headerBgColor', themeHeaderTextColor:'headerTextColor', themeHeaderBorderColor:'headerBorderColor', themeHeaderRadius:'headerRadius', themeHeaderOpacity:'headerOpacity', themeHeaderHeight:'headerHeight', themeHeaderBgMode:'headerBgMode',
     themeCollectionBgColor:'collectionBgColor', themeCollectionTextColor:'collectionTextColor', themeCollectionBorderColor:'collectionBorderColor', themeCollectionRadius:'collectionRadius', themeCollectionBgMode:'collectionBgMode', themeUseBuiltInCollectionArt:'useBuiltInCollectionArt',
     themeCardBgColor:'cardBgColor', themeCardTextColor:'cardTextColor', themeCardBorderColor:'cardBorderColor', themeCardRadius:'cardRadius', themeCardBgMode:'cardBgMode',
     themeWellBgColor:'wellBgColor', themeWellBorderColor:'wellBorderColor', themeWellBgMode:'wellBgMode', themeUseBuiltInWellArt:'useBuiltInWellArt',
@@ -773,6 +934,7 @@
       themeChecklistButtonSizeOutput:`${document.getElementById('themeChecklistButtonSize').value}px`,
       themeHeaderRadiusOutput:`${document.getElementById('themeHeaderRadius').value}px`,
       themeHeaderOpacityOutput:`${document.getElementById('themeHeaderOpacity').value}%`,
+      themeHeaderHeightOutput:Number(document.getElementById('themeHeaderHeight').value) ? `${document.getElementById('themeHeaderHeight').value}px` : 'Auto',
       themeCollectionRadiusOutput:`${document.getElementById('themeCollectionRadius').value}px`,
       themeCardRadiusOutput:`${document.getElementById('themeCardRadius').value}px`,
       themeArtWidthOutput:`${document.getElementById('themeArtWidth').value}px`
@@ -820,14 +982,38 @@
     });
   }
 
+  function updateHeaderImagePreview() {
+    const preview = document.getElementById('editHeaderImagePreview');
+    const source = pendingHeaderBgImage === undefined ? design.theme.headerBgImage : pendingHeaderBgImage;
+    const sizing = imageMode(document.getElementById('editHeaderBgMode').value);
+    preview.style.backgroundImage = source ? `url("${source}")` : 'none';
+    preview.style.backgroundSize = sizing.size;
+    preview.style.backgroundRepeat = sizing.repeat;
+    preview.querySelector('span').hidden = Boolean(source);
+  }
+
   function openHeaderEditor() {
+    pendingHeaderBgImage = undefined;
     document.getElementById('editKicker').value = design.header.kicker;
     document.getElementById('editTitle').value = design.header.title;
     document.getElementById('editSubtitle').value = design.header.subtitle;
     document.getElementById('editCollectedLabel').value = design.header.collectedLabel;
     document.getElementById('editMasteredLabel').value = design.header.masteredLabel;
+    document.getElementById('editMasterPrompt').value = design.header.masterPrompt;
     document.getElementById('editFooterNote').value = design.header.footerNote;
     document.getElementById('editShowSummary').checked = design.header.showSummary;
+    document.getElementById('editHeaderBgFile').value = '';
+    document.getElementById('editHeaderBgMode').value = design.theme.headerBgMode;
+    document.getElementById('editHeaderBgColor').value = design.theme.headerBgColor;
+    document.getElementById('editHeaderTextColor').value = design.theme.headerTextColor;
+    document.getElementById('editHeaderBorderColor').value = design.theme.headerBorderColor;
+    document.getElementById('editHeaderRadius').value = design.theme.headerRadius;
+    document.getElementById('editHeaderOpacity').value = design.theme.headerOpacity;
+    document.getElementById('editHeaderHeight').value = design.theme.headerHeight;
+    document.getElementById('editHeaderRadiusOutput').textContent = `${design.theme.headerRadius}px`;
+    document.getElementById('editHeaderOpacityOutput').textContent = `${design.theme.headerOpacity}%`;
+    document.getElementById('editHeaderHeightOutput').textContent = design.theme.headerHeight ? `${design.theme.headerHeight}px` : 'Auto';
+    updateHeaderImagePreview();
     document.getElementById('headerEditorDialog').showModal();
   }
 
@@ -1117,6 +1303,10 @@
       if (!file || !studioDraft) return;
       try {
         studioDraft[key] = await resizeImage(file,artworkBounds(key));
+        if (key === 'headerBgImage' && !studioDraft.headerHeight) {
+          studioDraft.headerHeight = 220;
+          document.getElementById('themeHeaderHeight').value = '220';
+        }
         previewStudioDraft();
         showToast('Artwork resized and loaded');
       } catch {
@@ -1206,6 +1396,38 @@
     studioOriginal = null;
   });
 
+  document.getElementById('editHeaderBgFile').addEventListener('change', async (event) => {
+    const file = event.currentTarget.files?.[0];
+    if (!file) return;
+    try {
+      pendingHeaderBgImage = await resizeImage(file,artworkBounds('headerBgImage'));
+      if (!Number(document.getElementById('editHeaderHeight').value)) {
+        document.getElementById('editHeaderHeight').value = '220';
+        document.getElementById('editHeaderHeightOutput').textContent = '220px';
+      }
+      updateHeaderImagePreview();
+      showToast('Header image resized and loaded');
+    } catch {
+      alert('That header image could not be read.');
+    }
+  });
+  document.getElementById('removeEditHeaderBgBtn').addEventListener('click', () => {
+    pendingHeaderBgImage = '';
+    document.getElementById('editHeaderBgFile').value = '';
+    updateHeaderImagePreview();
+    showToast('Header image removed');
+  });
+  document.getElementById('editHeaderBgMode').addEventListener('input',updateHeaderImagePreview);
+  document.getElementById('editHeaderRadius').addEventListener('input', (event) => {
+    document.getElementById('editHeaderRadiusOutput').textContent = `${event.currentTarget.value}px`;
+  });
+  document.getElementById('editHeaderOpacity').addEventListener('input', (event) => {
+    document.getElementById('editHeaderOpacityOutput').textContent = `${event.currentTarget.value}%`;
+  });
+  document.getElementById('editHeaderHeight').addEventListener('input', (event) => {
+    document.getElementById('editHeaderHeightOutput').textContent = Number(event.currentTarget.value) ? `${event.currentTarget.value}px` : 'Auto';
+  });
+
   document.getElementById('headerEditorForm').addEventListener('submit', (event) => {
     event.preventDefault();
     design.header = {
@@ -1214,9 +1436,18 @@
       subtitle:document.getElementById('editSubtitle').value,
       collectedLabel:document.getElementById('editCollectedLabel').value,
       masteredLabel:document.getElementById('editMasteredLabel').value,
+      masterPrompt:document.getElementById('editMasterPrompt').value,
       footerNote:document.getElementById('editFooterNote').value,
       showSummary:document.getElementById('editShowSummary').checked
     };
+    design.theme.headerBgMode = document.getElementById('editHeaderBgMode').value;
+    design.theme.headerBgColor = document.getElementById('editHeaderBgColor').value;
+    design.theme.headerTextColor = document.getElementById('editHeaderTextColor').value;
+    design.theme.headerBorderColor = document.getElementById('editHeaderBorderColor').value;
+    design.theme.headerRadius = Number(document.getElementById('editHeaderRadius').value);
+    design.theme.headerOpacity = Number(document.getElementById('editHeaderOpacity').value);
+    design.theme.headerHeight = Number(document.getElementById('editHeaderHeight').value);
+    if (pendingHeaderBgImage !== undefined) design.theme.headerBgImage = pendingHeaderBgImage;
     if (!saveDesign()) return;
     document.getElementById('headerEditorDialog').close();
     renderAll();
@@ -1483,6 +1714,55 @@
     saveDesign();
     renderAll();
     showToast('Published design restored');
+  });
+
+  spriteSearchInput.addEventListener('input',renderSpriteSearchResults);
+  spriteSearchInput.addEventListener('focus', () => {
+    if (spriteSearchInput.value.trim()) renderSpriteSearchResults();
+  });
+  spriteSearchInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeSpriteSearchResults();
+      spriteSearchInput.blur();
+    }
+    if (event.key === 'ArrowDown' && !spriteSearchResults.hidden) {
+      const first = spriteSearchResults.querySelector('.sprite-search-result');
+      if (first) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  });
+  spriteSearchResults.addEventListener('keydown', (event) => {
+    if (!['ArrowDown','ArrowUp','Escape'].includes(event.key)) return;
+    event.preventDefault();
+    if (event.key === 'Escape') {
+      closeSpriteSearchResults();
+      return spriteSearchInput.focus();
+    }
+    const options = [...spriteSearchResults.querySelectorAll('.sprite-search-result')];
+    const current = options.indexOf(document.activeElement);
+    const offset = event.key === 'ArrowDown' ? 1 : -1;
+    options[(current + offset + options.length) % options.length]?.focus();
+  });
+  spriteSearchForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const matches = findSpriteMatches(spriteSearchInput.value);
+    if (matches[0]) openSpriteSearchResult(matches[0]);
+    else {
+      renderSpriteSearchResults();
+      spriteSearchStatus.textContent = 'No matching sprites';
+    }
+  });
+  clearSpriteSearchBtn.addEventListener('click', () => {
+    spriteSearchInput.value = '';
+    clearSpriteSearchBtn.hidden = true;
+    closeSpriteSearchResults();
+    spriteSearchStatus.textContent = 'Search cleared';
+    spriteSearchInput.focus();
+  });
+  document.addEventListener('pointerdown', (event) => {
+    if (!event.target.closest('.sprite-search')) closeSpriteSearchResults();
   });
 
   checklistPage.addEventListener('touchstart', (event) => {

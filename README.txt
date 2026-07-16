@@ -3,7 +3,7 @@ GALAXY SPRITE CHECKLIST
 Review build goals
 - Four organized rarity pages: Rare, Epic, Legendary, and Mythic.
 - Collected and Mastered progress saved on the current device.
-- Horizontal variant rows and full-page rarity swipes on phones.
+- Momentum-based horizontal variant rows and full-page rarity swipes on phones.
 - Keyboard-accessible rarity tabs and 44px minimum touch targets.
 - Installable, offline-friendly GitHub Pages app.
 - Visual Edit Mode for changing or removing text, replacing images, and hiding content.
@@ -42,8 +42,13 @@ Visual editing
 21. On phones, vertical gestures that begin over a sprite are reserved for moving the page. Clearly horizontal gestures move only the sprite row, so you no longer need to find an empty area before scrolling down.
 22. Uploaded artwork is automatically resized and compressed for its destination: wide page and group backgrounds, shorter header art, portrait card backgrounds, square sprite/image-well art, and tall side artwork.
 23. Published designs include a version timestamp. When a newer public design is deployed, browsers automatically adopt it while keeping their own Collected and Mastered progress. Local edits made after that publication remain local until the next public-design export.
-24. App update ZIPs intentionally do not contain published-design.js, so installing future code updates cannot overwrite the customized design already published on GitHub.
+24. This one-time optimized update deliberately includes published-design.js and the published-assets folder. Upload both so the current public design can render immediately without parsing a multi-megabyte embedded-image file. Normal future code-only update ZIPs can omit both items to avoid replacing the customized public design.
 25. Editing is hidden behind a private owner key. Owner access remembers an approved browser until Lock owner mode is selected or that browser's site data is cleared. The key is stored only as a one-way hash in the public code; GitHub repository permissions remain the security boundary for changing the live public design.
+26. There is no loading screen. The public design configuration is intentionally small and its background begins downloading immediately.
+27. A clear left/right flick starts a slower continuous row glide. It keeps moving without decelerating or snapping until you touch that row again or it reaches the beginning/end. Touching a moving row only stops it and does not accidentally select the sprite beneath your finger. Reduced-motion devices do not auto-glide.
+28. Use the search bar to find a visible sprite by group, variant, or rarity. Results show the current collection status. Choosing a result opens the correct rarity page, centers and highlights the exact card, and focuses its inventory control; both inventory and crown controls remain available on that card.
+29. Edit header includes a Crown instruction field for replacing or removing “Tap crown to master.”
+30. Edit header also provides a direct header-image upload plus Cover, Contain, Repeat, and Stretch modes, box/text/border colors, corner roundness, opacity, and minimum banner height. Header artwork is automatically resized for a wide 1600 × 700 area before it is saved; the first uploaded image suggests a 220px banner height, while 0 returns to automatic sizing.
 
 Notes
 - Mastering a sprite also marks it collected.

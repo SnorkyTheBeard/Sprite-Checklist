@@ -3,13 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#111342">
+  <meta name="theme-color" content="#050505">
   <meta name="description" content="A visually editable Fortnite Sprite checklist with collected and mastered progress.">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Galaxy Sprite Checklist</title>
+  <meta name="apple-mobile-web-app-title" content="Fortnite Sprite Tracker">
+  <title>Fortnite Sprite Tracker</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="preload" as="image" href="published-assets/theme-body-bg-image.webp" fetchpriority="high">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -18,14 +20,14 @@
   <div class="app-shell">
     <header class="hero" id="hero">
       <button class="edit-chip editor-only" id="editHeaderBtn" type="button">Edit header</button>
-      <p class="kicker" id="heroKicker">Fortnite Collection Tracker</p>
-      <h1 id="heroTitle">Galaxy Sprite Checklist</h1>
-      <p class="sub" id="heroSubtitle">Tap a sprite to mark it collected. Tap its crown when it is mastered.</p>
+      <p class="kicker" id="heroKicker" hidden></p>
+      <h1 id="heroTitle">Fortnite Sprite Tracker</h1>
+      <p class="sub" id="heroSubtitle" hidden></p>
 
       <div class="summary" role="group" aria-label="Overall progress">
         <div>
           <strong id="collectedTotal">0 / 0</strong>
-          <span id="collectedLabel">Collected</span>
+          <span id="collectedLabel">In Collection</span>
           <span class="progress-track" aria-hidden="true"><i id="collectedBar"></i></span>
         </div>
         <div>
@@ -54,12 +56,23 @@
       </div>
     </section>
 
+    <section class="sprite-search" aria-label="Find a sprite">
+      <form id="spriteSearchForm" class="sprite-search-form" role="search">
+        <label class="visually-hidden" for="spriteSearchInput">Search sprites</label>
+        <input id="spriteSearchInput" type="search" inputmode="search" autocomplete="off" placeholder="Search sprites, groups, or variants" aria-controls="spriteSearchResults" aria-expanded="false">
+        <button type="submit">Find</button>
+        <button id="clearSpriteSearchBtn" class="search-clear" type="button" hidden>Clear</button>
+      </form>
+      <div id="spriteSearchResults" class="sprite-search-results" role="listbox" aria-label="Matching sprites" hidden></div>
+      <p id="spriteSearchStatus" class="visually-hidden" aria-live="polite"></p>
+    </section>
+
     <nav class="rarity-tabs" id="rarityTabs" aria-label="Sprite rarity pages" role="tablist"></nav>
 
     <main id="checklistPage" role="tabpanel" aria-labelledby="activePageTitle">
       <header class="page-head">
         <div>
-          <p class="page-eyebrow" id="pageEyebrow">Checklist page</p>
+          <p class="page-eyebrow" id="pageEyebrow" hidden></p>
           <h2 id="activePageTitle">Rare Sprites</h2>
           <p id="pageDescription">Track every available variant in this rarity.</p>
         </div>
@@ -74,7 +87,7 @@
     </main>
 
     <footer>
-      <p id="footerNote">Progress is saved on this device.</p>
+      <p id="footerNote">All Progress Saves Locally</p>
       <button id="resetBtn" class="reset-btn" type="button">Reset all progress</button>
       <button id="ownerAccessBtn" class="owner-access-btn" type="button">Owner access</button>
     </footer>
@@ -125,6 +138,7 @@
               <label>Border color<input id="themeHeaderBorderColor" type="color"></label>
               <label>Corner roundness<input id="themeHeaderRadius" type="range" min="0" max="50" step="1"><span class="range-output" id="themeHeaderRadiusOutput"></span></label>
               <label>Box opacity<input id="themeHeaderOpacity" type="range" min="0" max="100" step="1"><span class="range-output" id="themeHeaderOpacityOutput"></span></label>
+              <label>Minimum height<input id="themeHeaderHeight" type="range" min="0" max="420" step="10"><span class="range-output" id="themeHeaderHeightOutput"></span></label>
               <label>Image fit<select id="themeHeaderBgMode"><option value="cover">Cover</option><option value="contain">Contain</option><option value="repeat">Repeat pattern</option><option value="stretch">Stretch</option></select></label>
             </div>
             <label>Header box image<input id="themeHeaderBgFile" type="file" accept="image/*"></label>
@@ -231,9 +245,29 @@
           <label>Collected label<input id="editCollectedLabel" type="text"></label>
           <label>Mastered label<input id="editMasteredLabel" type="text"></label>
         </div>
+        <label>Crown instruction<input id="editMasterPrompt" type="text" placeholder="Tap crown to master"></label>
         <label>Footer note<input id="editFooterNote" type="text"></label>
         <label class="check-field"><input id="editShowSummary" type="checkbox"> Show progress summary</label>
         <p class="field-help">Leave any text box empty to remove that text from the page.</p>
+
+        <details class="editor-subsection" open>
+          <summary>Header image and box style</summary>
+          <div class="editor-subsection-body">
+            <div id="editHeaderImagePreview" class="header-image-preview" role="img" aria-label="Current header image preview"><span>No header image</span></div>
+            <label>Choose your header image<input id="editHeaderBgFile" type="file" accept="image/*"></label>
+            <button id="removeEditHeaderBgBtn" class="secondary-wide" type="button">Remove header image</button>
+            <div class="field-grid">
+              <label>Image fit<select id="editHeaderBgMode"><option value="cover">Cover</option><option value="contain">Contain</option><option value="repeat">Repeat pattern</option><option value="stretch">Stretch</option></select></label>
+              <label>Box color<input id="editHeaderBgColor" type="color"></label>
+              <label>Text color<input id="editHeaderTextColor" type="color"></label>
+              <label>Border color<input id="editHeaderBorderColor" type="color"></label>
+              <label>Corner roundness<input id="editHeaderRadius" type="range" min="0" max="50" step="1"><span class="range-output" id="editHeaderRadiusOutput"></span></label>
+              <label>Box opacity<input id="editHeaderOpacity" type="range" min="0" max="100" step="1"><span class="range-output" id="editHeaderOpacityOutput"></span></label>
+              <label>Minimum height<input id="editHeaderHeight" type="range" min="0" max="420" step="10"><span class="range-output" id="editHeaderHeightOutput"></span></label>
+            </div>
+            <p class="field-help">Header artwork is automatically resized for a wide 1600 × 700 area. A height of 0 uses the text and counters to size the box automatically.</p>
+          </div>
+        </details>
         <div class="dialog-actions"><button type="button" data-close-dialog>Cancel</button><button class="primary-btn" type="submit">Save header</button></div>
       </div>
     </form>
