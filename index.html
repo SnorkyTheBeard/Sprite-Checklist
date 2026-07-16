@@ -1,32 +1,75 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#111342">
-  <title>Galaxy Sprite Tracker</title>
-  <link rel="manifest" href="manifest.json">
+  <meta name="description" content="A mobile-friendly Fortnite Sprite collection tracker with collected and mastered progress.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Galaxy Sprite Checklist</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <a class="skip-link" href="#collections">Skip to checklist</a>
+
   <div class="app-shell">
     <header class="hero">
       <p class="kicker">Fortnite Collection Tracker</p>
-      <h1>Galaxy Sprite Tracker</h1>
-      <p class="sub">Tap a sprite to mark it collected. Tap the crown above it to mark it mastered.</p>
-      <div class="summary">
-        <div><strong id="collectedTotal">0 / 61</strong><span>Collected</span></div>
-        <div><strong id="masteredTotal">0 / 61</strong><span>Mastered</span></div>
+      <h1>Galaxy Sprite Checklist</h1>
+      <p class="sub">Tap a sprite to mark it collected. Tap its crown when it is mastered.</p>
+
+      <div class="summary" role="group" aria-label="Overall progress">
+        <div>
+          <strong id="collectedTotal">0 / 0</strong>
+          <span>Collected</span>
+          <span class="progress-track" aria-hidden="true"><i id="collectedBar"></i></span>
+        </div>
+        <div>
+          <strong id="masteredTotal">0 / 0</strong>
+          <span>Mastered</span>
+          <span class="progress-track" aria-hidden="true"><i id="masteredBar"></i></span>
+        </div>
       </div>
     </header>
 
-    <nav class="rarity-tabs" id="rarityTabs" aria-label="Sprite rarities"></nav>
-    <main id="collections"></main>
+    <nav class="rarity-tabs" id="rarityTabs" aria-label="Sprite rarity pages" role="tablist"></nav>
+
+    <main id="checklistPage" role="tabpanel" aria-labelledby="activePageTitle">
+      <header class="page-head">
+        <div>
+          <p class="page-eyebrow">Checklist page</p>
+          <h2 id="activePageTitle">Rare Sprites</h2>
+          <p id="pageDescription">Track every available variant in this rarity.</p>
+        </div>
+        <strong class="page-count" id="pageCount">0 / 0</strong>
+      </header>
+
+      <div id="collections"></div>
+      <p class="page-swipe-hint" aria-hidden="true">Swipe left or right outside a sprite row to change rarity.</p>
+    </main>
 
     <footer>
+      <p>Progress is saved on this device.</p>
       <button id="resetBtn" class="reset-btn" type="button">Reset all progress</button>
     </footer>
   </div>
+
+  <dialog id="resetDialog" class="reset-dialog">
+    <form method="dialog">
+      <h2>Reset your checklist?</h2>
+      <p>This clears every collected and mastered mark on this device.</p>
+      <div class="dialog-actions">
+        <button value="cancel" type="submit">Keep progress</button>
+        <button id="confirmResetBtn" class="danger-btn" value="reset" type="submit">Reset everything</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="statusToast" class="status-toast" role="status" aria-live="polite"></div>
+  <noscript>This checklist needs JavaScript to save and update progress.</noscript>
 
   <script src="data.js"></script>
   <script src="app.js"></script>
