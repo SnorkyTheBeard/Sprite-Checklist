@@ -591,14 +591,21 @@
       const row = section.querySelector('.variant-row');
       let rowGesture = null;
       let suppressRowClickUntil = 0;
-      row.addEventListener('pointerdown', (event) => {
-        if (event.pointerType !== 'touch' || !event.isPrimary) return;
-        rowGesture = { pointerId:event.pointerId, x:event.clientX, y:event.clientY, scrollLeft:row.scrollLeft, horizontal:false };
-      });
-      row.addEventListener('pointermove', (event) => {
-        if (!rowGesture || event.pointerId !== rowGesture.pointerId) return;
-        const dx = event.clientX - rowGesture.x;
-        const dy = event.clientY - rowGesture.y;
+      const findTouch = (list,id) => {
+        for (let index = 0; index < list.length; index += 1) if (list[index].identifier === id) return list[index];
+        return null;
+      };
+      row.addEventListener('touchstart', (event) => {
+        if (event.touches.length !== 1) return;
+        const touch = event.touches[0];
+        rowGesture = { id:touch.identifier, x:touch.clientX, y:touch.clientY, scrollLeft:row.scrollLeft, horizontal:false };
+      }, { passive:true });
+      row.addEventListener('touchmove', (event) => {
+        if (!rowGesture) return;
+        const touch = findTouch(event.touches,rowGesture.id);
+        if (!touch) return;
+        const dx = touch.clientX - rowGesture.x;
+        const dy = touch.clientY - rowGesture.y;
         if (!rowGesture.horizontal) {
           if (Math.abs(dy) > 7 && Math.abs(dy) >= Math.abs(dx)) {
             rowGesture = null;
@@ -607,19 +614,18 @@
           if (Math.abs(dx) < 7 || Math.abs(dx) <= Math.abs(dy)) return;
           rowGesture.horizontal = true;
           row.classList.add('is-touch-dragging');
-          row.setPointerCapture?.(event.pointerId);
         }
         event.preventDefault();
         row.scrollLeft = rowGesture.scrollLeft - dx;
-      });
+      }, { passive:false });
       const endRowGesture = (event) => {
-        if (!rowGesture || event.pointerId !== rowGesture.pointerId) return;
+        if (!rowGesture || !findTouch(event.changedTouches,rowGesture.id)) return;
         if (rowGesture.horizontal) suppressRowClickUntil = Date.now() + 350;
         rowGesture = null;
         row.classList.remove('is-touch-dragging');
       };
-      row.addEventListener('pointerup',endRowGesture);
-      row.addEventListener('pointercancel',endRowGesture);
+      row.addEventListener('touchend',endRowGesture,{ passive:true });
+      row.addEventListener('touchcancel',endRowGesture,{ passive:true });
       row.addEventListener('click', (event) => {
         if (Date.now() < suppressRowClickUntil) {
           event.preventDefault();
@@ -857,7 +863,7 @@
     previewObjectUrl = null;
   }
 
-  async function resizeImage(file, maxSize = 900) {
+  async function resizeImage(file, bounds = 900) {
     const url = URL.createObjectURL(file);
     try {
       const image = new Image();
@@ -866,7 +872,9 @@
         image.onerror = reject;
         image.src = url;
       });
-      const scale = Math.min(1,maxSize / Math.max(image.naturalWidth,image.naturalHeight));
+      const maxWidth = typeof bounds === 'number' ? bounds : bounds.width;
+      const maxHeight = typeof bounds === 'number' ? bounds : bounds.height;
+      const scale = Math.min(1,maxWidth / image.naturalWidth,maxHeight / image.naturalHeight);
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1,Math.round(image.naturalWidth * scale));
       canvas.height = Math.max(1,Math.round(image.naturalHeight * scale));
@@ -875,6 +883,23 @@
     } finally {
       URL.revokeObjectURL(url);
     }
+  }
+
+  function artworkBounds(area) {
+    const sizes = {
+      bodyBgImage:{ width:1920, height:1440 },
+      headerBgImage:{ width:1600, height:700 },
+      collectionBgImage:{ width:1600, height:900 },
+      cardBgImage:{ width:900, height:1100 },
+      wellBgImage:{ width:900, height:900 },
+      leftArt:{ width:800, height:1800 },
+      rightArt:{ width:800, height:1800 },
+      page:{ width:1920, height:1440 },
+      group:{ width:1600, height:900 },
+      card:{ width:900, height:1100 },
+      sprite:{ width:900, height:900 }
+    };
+    return sizes[area] || { width:1200, height:1200 };
   }
 
   function isImageFile(file) {
@@ -905,7 +930,7 @@
   }
 
   async function applyDroppedSpriteImage(familyId,variantId,file) {
-    const image = await resizeImage(file,900);
+    const image = await resizeImage(file,artworkBounds('sprite'));
     const custom = familyCustom(familyId);
     custom.variants[variantId] ||= {};
     custom.variants[variantId].image = image;
@@ -1023,9 +1048,9 @@
       const file = event.currentTarget.files?.[0];
       if (!file || !studioDraft) return;
       try {
-        studioDraft[key] = await resizeImage(file,1800);
+        studioDraft[key] = await resizeImage(file,artworkBounds(key));
         previewStudioDraft();
-        showToast('Artwork loaded');
+        showToast('Artwork resized and loaded');
       } catch {
         alert('That artwork could not be read.');
       }
@@ -1037,11 +1062,11 @@
     if (!file || !studioDraft) return;
     try {
       const page = studioDraft.pageBackgrounds[studioPageRarity];
-      page.image = await resizeImage(file,1800);
+      page.image = await resizeImage(file,artworkBounds('page'));
       page.enabled = true;
       document.getElementById('themePageBgEnabled').checked = true;
       previewStudioDraft();
-      showToast('Page artwork loaded');
+      showToast('Page artwork resized and loaded');
     } catch {
       alert('That page artwork could not be read.');
     }
@@ -1134,9 +1159,9 @@
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      pendingPageBgImage = await resizeImage(file,1800);
+      pendingPageBgImage = await resizeImage(file,artworkBounds('page'));
       document.getElementById('editPageBgEnabled').checked = true;
-      showToast('Page background loaded');
+      showToast('Page background resized and loaded');
     } catch { alert('That page background could not be read.'); }
   });
   document.getElementById('removeEditPageBgBtn').addEventListener('click', () => {
@@ -1159,16 +1184,16 @@
     if (!saveDesign()) return;
     document.getElementById('pageEditorDialog').close();
     renderAll();
-    showToast('Page updated');
+    showToast(`${design.pages[activeRarity].title || activeRarity} page changes saved`);
   });
 
   document.getElementById('editFamilyBgFile').addEventListener('change', async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      pendingFamilyBgImage = await resizeImage(file,1800);
+      pendingFamilyBgImage = await resizeImage(file,artworkBounds('group'));
       document.getElementById('editFamilyCustomBg').checked = true;
-      showToast('Group background loaded');
+      showToast('Group background resized and loaded');
     } catch { alert('That group background could not be read.'); }
   });
   document.getElementById('removeFamilyBgBtn').addEventListener('click', () => {
@@ -1196,7 +1221,7 @@
     if (!saveDesign()) return;
     document.getElementById('familyEditorDialog').close();
     renderAll();
-    showToast('Group updated');
+    showToast(`${custom.name || 'Sprite group'} changes saved`);
   });
 
   document.getElementById('deleteFamilyBtn').addEventListener('click', () => {
@@ -1247,7 +1272,7 @@
     previewObjectUrl = URL.createObjectURL(file);
     setVariantPreview(previewObjectUrl);
     try {
-      pendingVariantImage = await resizeImage(file);
+      pendingVariantImage = await resizeImage(file,artworkBounds('sprite'));
       setVariantPreview(pendingVariantImage);
       clearPreviewObjectUrl();
     } catch {
@@ -1260,9 +1285,9 @@
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      pendingVariantCardImage = await resizeImage(file,1200);
+      pendingVariantCardImage = await resizeImage(file,artworkBounds('card'));
       document.getElementById('editVariantCustomCard').checked = true;
-      showToast('Card background loaded');
+      showToast('Card background resized and loaded');
     } catch { alert('That card background could not be read.'); }
   });
   document.getElementById('removeVariantCardBgBtn').addEventListener('click', () => {
@@ -1351,7 +1376,7 @@
     document.getElementById('variantEditorDialog').close();
     clearPreviewObjectUrl();
     renderAll();
-    showToast('Sprite updated');
+    showToast(`${custom.variants[variantId].name || 'Sprite'} changes saved`);
   });
 
   document.querySelectorAll('[data-close-dialog]').forEach((button) => {

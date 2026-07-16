@@ -40,6 +40,7 @@ Visual editing
 19. To publish your finished visual design for everyone, select Download public design. Upload the downloaded published-design.js file to the root of your GitHub repository, replace the older file, and commit the change. GitHub Pages will use it as the default design for every visitor. Collected and Mastered marks remain personal to each device.
 20. Edit page now controls a separate color and background image for each rarity page. Edit group controls a separate color and background image for that entire swipeable group box. Edit sprite controls a separate color and background image for that individual card. Each layer can use Cover, Contain, Repeat, or Stretch independently.
 21. On phones, vertical gestures that begin over a sprite are reserved for moving the page. Clearly horizontal gestures move only the sprite row, so you no longer need to find an empty area before scrolling down.
+22. Uploaded artwork is automatically resized and compressed for its destination: wide page and group backgrounds, shorter header art, portrait card backgrounds, square sprite/image-well art, and tall side artwork.
 
 Notes
 - Mastering a sprite also marks it collected.
