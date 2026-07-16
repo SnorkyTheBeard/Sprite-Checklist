@@ -41,6 +41,8 @@ Visual editing
 20. Edit page now controls a separate color and background image for each rarity page. Edit group controls a separate color and background image for that entire swipeable group box. Edit sprite controls a separate color and background image for that individual card. Each layer can use Cover, Contain, Repeat, or Stretch independently.
 21. On phones, vertical gestures that begin over a sprite are reserved for moving the page. Clearly horizontal gestures move only the sprite row, so you no longer need to find an empty area before scrolling down.
 22. Uploaded artwork is automatically resized and compressed for its destination: wide page and group backgrounds, shorter header art, portrait card backgrounds, square sprite/image-well art, and tall side artwork.
+23. Published designs include a version timestamp. When a newer public design is deployed, browsers automatically adopt it while keeping their own Collected and Mastered progress. Local edits made after that publication remain local until the next public-design export.
+24. App update ZIPs intentionally do not contain published-design.js, so installing future code updates cannot overwrite the customized design already published on GitHub.
 
 Notes
 - Mastering a sprite also marks it collected.
