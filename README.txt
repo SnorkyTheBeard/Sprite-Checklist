@@ -38,6 +38,8 @@ Visual editing
 17. Use Export backup before moving devices or making large changes. Import backup restores the complete design, custom groups and boxes, custom art, fonts, row order, and checklist progress.
 18. Select Save changes whenever you want reassurance that the current design and progress are stored. Individual edits also continue to save automatically.
 19. To publish your finished visual design for everyone, select Download public design. Upload the downloaded published-design.js file to the root of your GitHub repository, replace the older file, and commit the change. GitHub Pages will use it as the default design for every visitor. Collected and Mastered marks remain personal to each device.
+20. Edit page now controls a separate color and background image for each rarity page. Edit group controls a separate color and background image for that entire swipeable group box. Edit sprite controls a separate color and background image for that individual card. Each layer can use Cover, Contain, Repeat, or Stretch independently.
+21. On phones, vertical gestures that begin over a sprite are reserved for moving the page. Clearly horizontal gestures move only the sprite row, so you no longer need to find an empty area before scrolling down.
 
 Notes
 - Mastering a sprite also marks it collected.

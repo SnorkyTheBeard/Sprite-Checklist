@@ -244,6 +244,13 @@
         <label>Small heading<input id="editPageEyebrow" type="text"></label>
         <label>Page title<input id="editPageTitle" type="text"></label>
         <label>Page description<textarea id="editPageDescription" rows="3"></textarea></label>
+        <label class="check-field"><input id="editPageBgEnabled" type="checkbox"> Use a custom background for this page</label>
+        <div class="field-grid">
+          <label>Page background color<input id="editPageBgColor" type="color"></label>
+          <label>Background image fit<select id="editPageBgMode"><option value="cover">Cover</option><option value="contain">Contain</option><option value="repeat">Repeat pattern</option><option value="stretch">Stretch</option></select></label>
+        </div>
+        <label>Page background image<input id="editPageBgFile" type="file" accept="image/*"></label>
+        <button id="removeEditPageBgBtn" class="secondary-wide" type="button">Remove page background image</button>
         <p class="field-help">These changes apply only to the rarity page currently open.</p>
         <div class="dialog-actions"><button type="button" data-close-dialog>Cancel</button><button class="primary-btn" type="submit">Save page</button></div>
       </div>
@@ -257,6 +264,14 @@
         <input id="editFamilyId" type="hidden">
         <label>Group title<input id="editFamilyName" type="text"></label>
         <label>Classification<select id="editFamilyRarity"><option>Rare</option><option>Epic</option><option>Legendary</option><option>Mythic</option></select></label>
+        <label class="check-field"><input id="editFamilyCustomBg" type="checkbox"> Use a custom background for this group box</label>
+        <div class="field-grid">
+          <label>Group box color<input id="editFamilyBgColor" type="color"></label>
+          <label>Background image fit<select id="editFamilyBgMode"><option value="cover">Cover</option><option value="contain">Contain</option><option value="repeat">Repeat pattern</option><option value="stretch">Stretch</option></select></label>
+        </div>
+        <label>Group box background image<input id="editFamilyBgFile" type="file" accept="image/*"></label>
+        <button id="removeFamilyBgBtn" class="secondary-wide" type="button">Remove group background image</button>
+        <button id="restoreFamilyBgBtn" class="secondary-wide" type="button">Use main group-box design</button>
         <label class="check-field"><input id="editFamilyVisible" type="checkbox"> Show this group in the checklist</label>
         <p class="field-help">Hidden groups remain available while Edit Mode is on so you can restore them.</p>
         <button id="deleteFamilyBtn" class="danger-btn wide-action" type="button">Delete this entire group</button>
@@ -291,6 +306,14 @@
           <button id="removeVariantImageBtn" type="button">Remove image</button>
           <button id="restoreVariantBtn" type="button">Restore original</button>
         </div>
+        <label class="check-field"><input id="editVariantCustomCard" type="checkbox"> Use a custom background for this individual card</label>
+        <div class="field-grid">
+          <label>Card background color<input id="editVariantCardColor" type="color"></label>
+          <label>Background image fit<select id="editVariantCardMode"><option value="cover">Cover</option><option value="contain">Contain</option><option value="repeat">Repeat pattern</option><option value="stretch">Stretch</option></select></label>
+        </div>
+        <label>Card background image<input id="editVariantCardFile" type="file" accept="image/*"></label>
+        <button id="removeVariantCardBgBtn" class="secondary-wide" type="button">Remove card background image</button>
+        <button id="restoreVariantCardBgBtn" class="secondary-wide" type="button">Use main card design</button>
         <label class="check-field"><input id="editVariantVisible" type="checkbox"> Show this sprite in the checklist</label>
         <p class="field-help">Large uploads are resized before saving. Changes stay on this device unless you export a backup.</p>
         <button id="deleteVariantBtn" class="danger-btn wide-action" type="button">Delete this box</button>

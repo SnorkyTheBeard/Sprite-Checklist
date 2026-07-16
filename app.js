@@ -54,6 +54,9 @@
   let toastTimer;
   let touchStart = null;
   let pendingVariantImage;
+  let pendingVariantCardImage;
+  let pendingFamilyBgImage;
+  let pendingPageBgImage;
   let previewObjectUrl;
   let studioDraft;
   let studioOriginal;
@@ -146,7 +149,11 @@
     return {
       name:hasOwn(custom,'name') ? custom.name : family.name,
       visible:hasOwn(custom,'visible') ? custom.visible : true,
-      deleted:Boolean(custom.deleted)
+      deleted:Boolean(custom.deleted),
+      customBg:Boolean(custom.customBg),
+      bgColor:custom.bgColor || design.theme.collectionBgColor,
+      bgImage:hasOwn(custom,'bgImage') ? custom.bgImage : '',
+      bgMode:custom.bgMode || 'cover'
     };
   }
 
@@ -156,7 +163,11 @@
       name:hasOwn(custom,'name') ? custom.name : variant.name,
       image:hasOwn(custom,'image') ? custom.image : variant.image,
       visible:hasOwn(custom,'visible') ? custom.visible : true,
-      deleted:Boolean(custom.deleted)
+      deleted:Boolean(custom.deleted),
+      customCard:Boolean(custom.customCard),
+      cardColor:custom.cardColor || design.theme.cardBgColor,
+      cardImage:hasOwn(custom,'cardImage') ? custom.cardImage : '',
+      cardMode:custom.cardMode || 'cover'
     };
   }
 
@@ -231,6 +242,15 @@
     if (mode === 'repeat') return { size:'auto', repeat:'repeat' };
     if (mode === 'stretch') return { size:'100% 100%', repeat:'no-repeat' };
     return { size:'cover', repeat:'no-repeat' };
+  }
+
+  function applyCustomBackground(element, color, image, mode) {
+    element.style.backgroundColor = color;
+    element.style.backgroundImage = image ? `url("${image}")` : 'none';
+    const sizing = imageMode(mode);
+    element.style.backgroundSize = sizing.size;
+    element.style.backgroundRepeat = sizing.repeat;
+    element.style.backgroundPosition = 'center';
   }
 
   function applyImageSurface(root, prefix, image, mode, useBuiltInWhenEmpty = false) {
@@ -320,6 +340,7 @@
     card.dataset.familyId = family.id;
     card.dataset.variantId = variant.id;
     card.classList.toggle('is-hidden-editor', !view.visible);
+    if (view.customCard) applyCustomBackground(card,view.cardColor,view.cardImage,view.cardMode);
     const displayName = view.name || (editMode ? '[No label]' : '');
     const imageMarkup = view.image
       ? `<img src="${view.image}" alt="${escapeHtml(displayName || family.name)} Sprite" loading="lazy" decoding="async">`
@@ -549,6 +570,7 @@
       section.dataset.rarity = family.rarity;
       section.dataset.familyId = family.id;
       section.classList.toggle('is-hidden-editor', !familyInfo.visible);
+      if (familyInfo.customBg) applyCustomBackground(section,familyInfo.bgColor,familyInfo.bgImage,familyInfo.bgMode);
       const title = familyInfo.name || (editMode ? '[No group title]' : '');
       section.innerHTML = `
         <div class="collection-tools editor-only"><button class="edit-chip edit-family-btn" type="button">Edit group</button><button class="edit-chip add-variant-btn" type="button">Add box</button></div>
@@ -567,6 +589,43 @@
         document.getElementById('addVariantDialog').showModal();
       });
       const row = section.querySelector('.variant-row');
+      let rowGesture = null;
+      let suppressRowClickUntil = 0;
+      row.addEventListener('pointerdown', (event) => {
+        if (event.pointerType !== 'touch' || !event.isPrimary) return;
+        rowGesture = { pointerId:event.pointerId, x:event.clientX, y:event.clientY, scrollLeft:row.scrollLeft, horizontal:false };
+      });
+      row.addEventListener('pointermove', (event) => {
+        if (!rowGesture || event.pointerId !== rowGesture.pointerId) return;
+        const dx = event.clientX - rowGesture.x;
+        const dy = event.clientY - rowGesture.y;
+        if (!rowGesture.horizontal) {
+          if (Math.abs(dy) > 7 && Math.abs(dy) >= Math.abs(dx)) {
+            rowGesture = null;
+            return;
+          }
+          if (Math.abs(dx) < 7 || Math.abs(dx) <= Math.abs(dy)) return;
+          rowGesture.horizontal = true;
+          row.classList.add('is-touch-dragging');
+          row.setPointerCapture?.(event.pointerId);
+        }
+        event.preventDefault();
+        row.scrollLeft = rowGesture.scrollLeft - dx;
+      });
+      const endRowGesture = (event) => {
+        if (!rowGesture || event.pointerId !== rowGesture.pointerId) return;
+        if (rowGesture.horizontal) suppressRowClickUntil = Date.now() + 350;
+        rowGesture = null;
+        row.classList.remove('is-touch-dragging');
+      };
+      row.addEventListener('pointerup',endRowGesture);
+      row.addEventListener('pointercancel',endRowGesture);
+      row.addEventListener('click', (event) => {
+        if (Date.now() < suppressRowClickUntil) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      },true);
       orderedVariants(family).forEach((variant) => {
         const view = variantView(family,variant);
         if (view.visible || editMode) row.appendChild(makeCard(family,variant));
@@ -738,9 +797,15 @@
 
   function openPageEditor() {
     const page = design.pages[activeRarity];
+    const background = design.theme.pageBackgrounds[activeRarity];
+    pendingPageBgImage = undefined;
     document.getElementById('editPageEyebrow').value = page.eyebrow;
     document.getElementById('editPageTitle').value = page.title;
     document.getElementById('editPageDescription').value = page.description;
+    document.getElementById('editPageBgEnabled').checked = background.enabled;
+    document.getElementById('editPageBgColor').value = background.color;
+    document.getElementById('editPageBgMode').value = background.mode;
+    document.getElementById('editPageBgFile').value = '';
     document.getElementById('pageEditorDialog').showModal();
   }
 
@@ -748,9 +813,14 @@
     const family = allFamilies().find((item) => item.id === familyId);
     if (!family) return;
     const view = familyView(family);
+    pendingFamilyBgImage = undefined;
     document.getElementById('editFamilyId').value = familyId;
     document.getElementById('editFamilyName').value = view.name;
     document.getElementById('editFamilyRarity').value = familyRarity(family);
+    document.getElementById('editFamilyCustomBg').checked = view.customBg;
+    document.getElementById('editFamilyBgColor').value = view.bgColor;
+    document.getElementById('editFamilyBgMode').value = view.bgMode;
+    document.getElementById('editFamilyBgFile').value = '';
     document.getElementById('editFamilyVisible').checked = view.visible;
     document.getElementById('familyEditorDialog').showModal();
   }
@@ -761,12 +831,17 @@
     if (!family || !variant) return;
     const view = variantView(family,variant);
     pendingVariantImage = undefined;
+    pendingVariantCardImage = undefined;
     clearPreviewObjectUrl();
     document.getElementById('editVariantFamilyId').value = familyId;
     document.getElementById('editVariantId').value = variantId;
     document.getElementById('editVariantName').value = view.name;
     document.getElementById('editVariantImage').value = '';
     document.getElementById('editVariantVisible').checked = view.visible;
+    document.getElementById('editVariantCustomCard').checked = view.customCard;
+    document.getElementById('editVariantCardColor').value = view.cardColor;
+    document.getElementById('editVariantCardMode').value = view.cardMode;
+    document.getElementById('editVariantCardFile').value = '';
     setVariantPreview(view.image);
     document.getElementById('variantEditorDialog').showModal();
   }
@@ -1055,6 +1130,20 @@
     showToast('Header updated');
   });
 
+  document.getElementById('editPageBgFile').addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      pendingPageBgImage = await resizeImage(file,1800);
+      document.getElementById('editPageBgEnabled').checked = true;
+      showToast('Page background loaded');
+    } catch { alert('That page background could not be read.'); }
+  });
+  document.getElementById('removeEditPageBgBtn').addEventListener('click', () => {
+    pendingPageBgImage = '';
+    showToast('Page background image removed');
+  });
+
   document.getElementById('pageEditorForm').addEventListener('submit', (event) => {
     event.preventDefault();
     design.pages[activeRarity] = {
@@ -1062,10 +1151,35 @@
       title:document.getElementById('editPageTitle').value,
       description:document.getElementById('editPageDescription').value
     };
+    const pageBackground = design.theme.pageBackgrounds[activeRarity];
+    pageBackground.enabled = document.getElementById('editPageBgEnabled').checked;
+    pageBackground.color = document.getElementById('editPageBgColor').value;
+    pageBackground.mode = document.getElementById('editPageBgMode').value;
+    if (pendingPageBgImage !== undefined) pageBackground.image = pendingPageBgImage;
     if (!saveDesign()) return;
     document.getElementById('pageEditorDialog').close();
     renderAll();
     showToast('Page updated');
+  });
+
+  document.getElementById('editFamilyBgFile').addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      pendingFamilyBgImage = await resizeImage(file,1800);
+      document.getElementById('editFamilyCustomBg').checked = true;
+      showToast('Group background loaded');
+    } catch { alert('That group background could not be read.'); }
+  });
+  document.getElementById('removeFamilyBgBtn').addEventListener('click', () => {
+    pendingFamilyBgImage = '';
+    document.getElementById('editFamilyCustomBg').checked = true;
+    showToast('Group background image removed');
+  });
+  document.getElementById('restoreFamilyBgBtn').addEventListener('click', () => {
+    pendingFamilyBgImage = undefined;
+    document.getElementById('editFamilyCustomBg').checked = false;
+    showToast('Main group-box design selected');
   });
 
   document.getElementById('familyEditorForm').addEventListener('submit', (event) => {
@@ -1075,6 +1189,10 @@
     custom.name = document.getElementById('editFamilyName').value;
     custom.rarity = document.getElementById('editFamilyRarity').value;
     custom.visible = document.getElementById('editFamilyVisible').checked;
+    custom.customBg = document.getElementById('editFamilyCustomBg').checked;
+    custom.bgColor = document.getElementById('editFamilyBgColor').value;
+    custom.bgMode = document.getElementById('editFamilyBgMode').value;
+    if (pendingFamilyBgImage !== undefined) custom.bgImage = pendingFamilyBgImage;
     if (!saveDesign()) return;
     document.getElementById('familyEditorDialog').close();
     renderAll();
@@ -1136,6 +1254,26 @@
       alert('That image could not be read.');
       pendingVariantImage = undefined;
     }
+  });
+
+  document.getElementById('editVariantCardFile').addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      pendingVariantCardImage = await resizeImage(file,1200);
+      document.getElementById('editVariantCustomCard').checked = true;
+      showToast('Card background loaded');
+    } catch { alert('That card background could not be read.'); }
+  });
+  document.getElementById('removeVariantCardBgBtn').addEventListener('click', () => {
+    pendingVariantCardImage = '';
+    document.getElementById('editVariantCustomCard').checked = true;
+    showToast('Card background image removed');
+  });
+  document.getElementById('restoreVariantCardBgBtn').addEventListener('click', () => {
+    pendingVariantCardImage = undefined;
+    document.getElementById('editVariantCustomCard').checked = false;
+    showToast('Main card design selected');
   });
 
   document.getElementById('removeVariantImageBtn').addEventListener('click', () => {
@@ -1204,6 +1342,10 @@
     custom.variants[variantId] ||= {};
     custom.variants[variantId].name = document.getElementById('editVariantName').value;
     custom.variants[variantId].visible = document.getElementById('editVariantVisible').checked;
+    custom.variants[variantId].customCard = document.getElementById('editVariantCustomCard').checked;
+    custom.variants[variantId].cardColor = document.getElementById('editVariantCardColor').value;
+    custom.variants[variantId].cardMode = document.getElementById('editVariantCardMode').value;
+    if (pendingVariantCardImage !== undefined) custom.variants[variantId].cardImage = pendingVariantCardImage;
     if (pendingVariantImage !== undefined) custom.variants[variantId].image = pendingVariantImage;
     if (!saveDesign()) return;
     document.getElementById('variantEditorDialog').close();
