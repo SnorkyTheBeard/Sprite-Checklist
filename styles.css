@@ -126,13 +126,46 @@ body.edit-mode .editor-only { display:flex!important; }
 h1 { margin:6px 0 8px; font-family:var(--font-heading); font-size:clamp(28px,8vw,var(--theme-title-size)); line-height:.96; letter-spacing:-.04em; text-wrap:balance; }
 .sub { margin:0 auto; max-width:620px; color:var(--theme-muted); font-size:14px; line-height:1.45; text-wrap:balance; }
 .summary { display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:540px; margin:16px auto 0; }
-.summary > div { padding:11px 12px 12px; border-radius:16px; background:var(--theme-summary-bg); border:1px solid var(--line); }
+.summary-box { position:relative; padding:11px 12px 12px; border-radius:16px; background:var(--theme-summary-bg); border:1px solid var(--line); }
 .summary strong { display:block; font-size:20px; }
 .summary span:not(.progress-track) { display:block; color:#c8c3e5; font-size:12px; margin-top:2px; }
 .progress-track { display:block; height:5px; margin-top:9px; overflow:hidden; border-radius:99px; background:rgba(255,255,255,.12); }
 .progress-track i { display:block; width:0; height:100%; border-radius:inherit; transition:width .25s ease; }
 #collectedBar { background:linear-gradient(90deg,#59c8ff,#8b72ff); }
 #masteredBar { background:linear-gradient(90deg,#f4b82e,#ffe184); }
+.summary-move-handle {
+  position:absolute;
+  left:50%;
+  top:-13px;
+  z-index:5;
+  min-height:30px;
+  padding:5px 11px;
+  border:1px solid #a8efff;
+  border-radius:999px;
+  color:#10142b;
+  background:linear-gradient(180deg,#baf4ff,#8bdcff);
+  box-shadow:0 5px 14px rgba(0,0,0,.28);
+  font-size:11px;
+  font-weight:950;
+  line-height:1;
+  cursor:grab;
+  touch-action:none;
+  transform:translateX(-50%);
+  user-select:none;
+  -webkit-user-select:none;
+}
+.summary-move-handle:active { cursor:grabbing; }
+.hero.summary-free-positioning { min-height:220px; min-height:max(220px,var(--theme-header-height)); }
+.hero.summary-free-positioning .summary { display:block; width:0; height:0; max-width:none; margin:0; }
+.hero.summary-free-positioning .summary-box {
+  position:absolute;
+  left:var(--summary-x,50%);
+  top:var(--summary-y,72%);
+  z-index:3;
+  width:min(240px,calc(50% - 20px));
+  transform:translate(-50%,-50%);
+}
+.hero.summary-free-positioning .summary-box.is-summary-moving { outline:3px solid #9be8ff; outline-offset:3px; box-shadow:0 16px 34px rgba(0,0,0,.42); }
 
 .editor-dock { display:flex; align-items:flex-start; flex-wrap:wrap; gap:8px; margin:10px 0 -1px; }
 .editor-dock button,.edit-chip,.inline-actions button { min-height:42px; padding:8px 12px; border:1px solid rgba(255,255,255,.2); border-radius:12px; color:#fff; background:rgba(22,22,66,.94); font-weight:900; cursor:pointer; }
@@ -412,7 +445,8 @@ body.hide-stars::before { display:none; }
 
 @media (max-width:480px) {
   .hero { padding-inline:12px; }
-  .summary > div { padding-inline:8px; }
+  .summary-box { padding-inline:8px; }
+  .hero.summary-free-positioning .summary-box { width:min(210px,calc(50% - 12px)); }
   .tab { min-width:68px; padding-inline:10px; font-size:13px; }
   .page-head { align-items:flex-start; }
   .page-head p:not(.page-eyebrow) { max-width:220px; }

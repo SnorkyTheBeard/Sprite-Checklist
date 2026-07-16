@@ -58,6 +58,7 @@ Visual editing
 32. Safari compatibility includes a preloaded bundled Playful webfont, opaque fallbacks for newer color functions, WebKit blur support, dynamic viewport sizing, a non-fixed iPhone/iPad background, and stacked editor controls at common iPhone widths. These prevent transparent boxes, mismatched typography, unstable fixed backgrounds, and cramped mobile dialogs that WebKit can otherwise display.
 33. Automatic GitHub publishing requires the separate repository-limited token because the visual Owner key only unlocks local editing controls; it does not and should not contain permission to write to GitHub.
 34. Image editors now show an in-dialog processing message, temporarily disable Save while artwork is being optimized, and show a visible storage error instead of appearing unresponsive. A successful Save closes the editor automatically and displays a longer confirmation notification. Uploaded artwork also uses adaptive WebP compression to reduce intermittent Safari storage failures.
+35. In Edit Mode, the In Collection and Mastered progress boxes each have their own Move handle. Drag only that handle on a computer or phone to position the box anywhere inside the header; normal swipes elsewhere still scroll. Positions are stored as responsive percentages, saved automatically, included in backups and public publishing, and constrained inside the header on smaller screens. Edit header > Progress box positions can reset both boxes to their centered layout.
 
 Notes
 - Mastering a sprite also marks it collected.

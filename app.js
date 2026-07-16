@@ -11,6 +11,12 @@
   const rarities = ['Rare','Epic','Legendary','Mythic'].filter((rarity) => baseData.some((family) => family.rarity === rarity));
   const defaultRarity = rarities[0] || 'Rare';
 
+  const DEFAULT_SUMMARY_POSITIONS = {
+    mode:'flow',
+    collected:{ x:28, y:72 },
+    mastered:{ x:72, y:72 }
+  };
+
   const DEFAULT_HEADER = {
     kicker:'Fortnite Collection Tracker',
     title:'Galaxy Sprite Checklist',
@@ -19,7 +25,8 @@
     masteredLabel:'Mastered',
     masterPrompt:'Tap crown to master',
     footerNote:'Progress is saved on this device.',
-    showSummary:true
+    showSummary:true,
+    summaryPositions:DEFAULT_SUMMARY_POSITIONS
   };
 
   const DEFAULT_PAGES = Object.fromEntries(rarities.map((rarity) => [rarity, {
@@ -76,6 +83,7 @@
   let cloudSyncInFlight = false;
   let cloudSyncQueued = false;
   let lastPublicDesignCheck = 0;
+  let summaryDrag = null;
 
   const tabsEl = document.getElementById('rarityTabs');
   const collectionsEl = document.getElementById('collections');
@@ -110,11 +118,28 @@
     }
   }
 
+  function clamp(value, minimum, maximum) {
+    return Math.max(minimum,Math.min(maximum,value));
+  }
+
+  function normalizeSummaryPositions(stored = {}) {
+    const point = (value, fallback) => ({
+      x:clamp(Number.isFinite(Number(value?.x)) ? Number(value.x) : fallback.x,0,100),
+      y:clamp(Number.isFinite(Number(value?.y)) ? Number(value.y) : fallback.y,0,100)
+    });
+    return {
+      mode:stored?.mode === 'free' ? 'free' : 'flow',
+      collected:point(stored?.collected,DEFAULT_SUMMARY_POSITIONS.collected),
+      mastered:point(stored?.mastered,DEFAULT_SUMMARY_POSITIONS.mastered)
+    };
+  }
+
   function normalizeDesign(stored = {}) {
     const storedTheme = stored.theme || {};
+    const storedHeader = stored.header || {};
     return {
       _meta:stored._meta && typeof stored._meta === 'object' ? { ...stored._meta } : {},
-      header:{ ...DEFAULT_HEADER, ...(stored.header || {}) },
+      header:{ ...DEFAULT_HEADER, ...storedHeader, summaryPositions:normalizeSummaryPositions(storedHeader.summaryPositions) },
       pages:Object.fromEntries(rarities.map((rarity) => [rarity, { ...DEFAULT_PAGES[rarity], ...(stored.pages?.[rarity] || {}) }])),
       families:stored.families && typeof stored.families === 'object' ? stored.families : {},
       customFamilies:Array.isArray(stored.customFamilies) ? stored.customFamilies : [],
@@ -388,7 +413,138 @@
     const summary = document.querySelector('.summary');
     summary.hidden = !design.header.showSummary && !editMode;
     summary.classList.toggle('is-hidden-editor', !design.header.showSummary);
+    applySummaryPositions();
+    document.querySelector('[data-summary-box="collected"] .summary-move-handle').setAttribute('aria-label',`Move ${design.header.collectedLabel || 'collected'} box`);
+    document.querySelector('[data-summary-box="mastered"] .summary-move-handle').setAttribute('aria-label',`Move ${design.header.masteredLabel || 'mastered'} box`);
     document.title = design.header.title || 'Sprite Checklist';
+  }
+
+  function summaryBox(key) {
+    return document.querySelector(`[data-summary-box="${key}"]`);
+  }
+
+  function setSummaryBoxPoint(key, point) {
+    const box = summaryBox(key);
+    if (!box) return;
+    box.style.setProperty('--summary-x',`${point.x}%`);
+    box.style.setProperty('--summary-y',`${point.y}%`);
+  }
+
+  function boundedSummaryPoint(key, x, y) {
+    const hero = document.getElementById('hero');
+    const box = summaryBox(key);
+    const heroRect = hero.getBoundingClientRect();
+    const boxRect = box.getBoundingClientRect();
+    if (!heroRect.width || !heroRect.height) return { x:clamp(x,0,100), y:clamp(y,0,100) };
+    const halfWidth = Math.min(49,(boxRect.width / 2 + 10) / heroRect.width * 100);
+    const halfHeight = Math.min(49,(boxRect.height / 2 + 10) / heroRect.height * 100);
+    return {
+      x:clamp(x,halfWidth,100 - halfWidth),
+      y:clamp(y,halfHeight,100 - halfHeight)
+    };
+  }
+
+  function applySummaryPositions() {
+    const hero = document.getElementById('hero');
+    const positions = normalizeSummaryPositions(design.header.summaryPositions);
+    design.header.summaryPositions = positions;
+    const free = positions.mode === 'free' && (design.header.showSummary || editMode);
+    hero.classList.toggle('summary-free-positioning',free);
+    ['collected','mastered'].forEach((key) => {
+      const box = summaryBox(key);
+      if (!free) {
+        box.style.removeProperty('--summary-x');
+        box.style.removeProperty('--summary-y');
+        return;
+      }
+      setSummaryBoxPoint(key,positions[key]);
+    });
+    if (!free) return;
+    requestAnimationFrame(() => {
+      ['collected','mastered'].forEach((key) => setSummaryBoxPoint(key,boundedSummaryPoint(key,positions[key].x,positions[key].y)));
+    });
+  }
+
+  function activateSummaryFreePositioning() {
+    if (design.header.summaryPositions?.mode === 'free') return;
+    const hero = document.getElementById('hero');
+    const heroRect = hero.getBoundingClientRect();
+    const centers = Object.fromEntries(['collected','mastered'].map((key) => {
+      const rect = summaryBox(key).getBoundingClientRect();
+      return [key,{ x:rect.left + rect.width / 2, y:rect.top + rect.height / 2 }];
+    }));
+    design.header.summaryPositions = normalizeSummaryPositions({
+      mode:'free',
+      collected:{ x:(centers.collected.x - heroRect.left) / heroRect.width * 100, y:(centers.collected.y - heroRect.top) / heroRect.height * 100 },
+      mastered:{ x:(centers.mastered.x - heroRect.left) / heroRect.width * 100, y:(centers.mastered.y - heroRect.top) / heroRect.height * 100 }
+    });
+    applySummaryPositions();
+    const resizedHeroRect = hero.getBoundingClientRect();
+    ['collected','mastered'].forEach((key) => {
+      const point = boundedSummaryPoint(
+        key,
+        (centers[key].x - resizedHeroRect.left) / resizedHeroRect.width * 100,
+        (centers[key].y - resizedHeroRect.top) / resizedHeroRect.height * 100
+      );
+      design.header.summaryPositions[key] = point;
+      setSummaryBoxPoint(key,point);
+    });
+  }
+
+  function startSummaryDrag(event) {
+    if (!editMode || (event.button !== undefined && event.button !== 0)) return;
+    const handle = event.currentTarget;
+    const box = handle.closest('[data-summary-box]');
+    const key = box.dataset.summaryBox;
+    activateSummaryFreePositioning();
+    const rect = box.getBoundingClientRect();
+    summaryDrag = {
+      key,
+      handle,
+      pointerId:event.pointerId,
+      offsetX:event.clientX - (rect.left + rect.width / 2),
+      offsetY:event.clientY - (rect.top + rect.height / 2)
+    };
+    box.classList.add('is-summary-moving');
+    handle.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  }
+
+  function moveSummaryDrag(event) {
+    if (!summaryDrag || event.pointerId !== summaryDrag.pointerId) return;
+    const heroRect = document.getElementById('hero').getBoundingClientRect();
+    const x = (event.clientX - summaryDrag.offsetX - heroRect.left) / heroRect.width * 100;
+    const y = (event.clientY - summaryDrag.offsetY - heroRect.top) / heroRect.height * 100;
+    const point = boundedSummaryPoint(summaryDrag.key,x,y);
+    design.header.summaryPositions[summaryDrag.key] = point;
+    setSummaryBoxPoint(summaryDrag.key,point);
+    event.preventDefault();
+  }
+
+  function finishSummaryDrag(event) {
+    if (!summaryDrag || event.pointerId !== summaryDrag.pointerId) return;
+    const { key, handle, pointerId } = summaryDrag;
+    summaryBox(key).classList.remove('is-summary-moving');
+    if (handle.hasPointerCapture?.(pointerId)) handle.releasePointerCapture(pointerId);
+    summaryDrag = null;
+    if (!saveDesign()) return;
+    const label = key === 'collected' ? (design.header.collectedLabel || 'Collected') : (design.header.masteredLabel || 'Mastered');
+    showToast(`${label} box position saved`);
+  }
+
+  function nudgeSummaryBox(event) {
+    if (!editMode || !['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) return;
+    event.preventDefault();
+    activateSummaryFreePositioning();
+    const key = event.currentTarget.closest('[data-summary-box]').dataset.summaryBox;
+    const heroRect = document.getElementById('hero').getBoundingClientRect();
+    const point = design.header.summaryPositions[key];
+    const pixels = event.shiftKey ? 12 : 4;
+    const dx = (event.key === 'ArrowLeft' ? -pixels : event.key === 'ArrowRight' ? pixels : 0) / heroRect.width * 100;
+    const dy = (event.key === 'ArrowUp' ? -pixels : event.key === 'ArrowDown' ? pixels : 0) / heroRect.height * 100;
+    design.header.summaryPositions[key] = boundedSummaryPoint(key,point.x + dx,point.y + dy);
+    setSummaryBoxPoint(key,design.header.summaryPositions[key]);
+    saveDesign();
   }
 
   function makeCard(family, variant) {
@@ -1029,6 +1185,7 @@
     document.getElementById('editMasterPrompt').value = design.header.masterPrompt;
     document.getElementById('editFooterNote').value = design.header.footerNote;
     document.getElementById('editShowSummary').checked = design.header.showSummary;
+    document.getElementById('editSummaryPositionMode').value = design.header.summaryPositions?.mode === 'free' ? 'free' : 'flow';
     document.getElementById('editHeaderBgFile').value = '';
     document.getElementById('editHeaderBgMode').value = design.theme.headerBgMode;
     document.getElementById('editHeaderBgColor').value = design.theme.headerBgColor;
@@ -1658,7 +1815,12 @@
   document.getElementById('headerEditorForm').addEventListener('submit', (event) => {
     event.preventDefault();
     if (!editorReadyToSave(event.currentTarget)) return;
+    const requestedPositionMode = document.getElementById('editSummaryPositionMode').value;
+    const summaryPositions = requestedPositionMode === 'free'
+      ? normalizeSummaryPositions(design.header.summaryPositions?.mode === 'free' ? design.header.summaryPositions : { ...DEFAULT_SUMMARY_POSITIONS, mode:'free' })
+      : normalizeSummaryPositions(DEFAULT_SUMMARY_POSITIONS);
     design.header = {
+      ...design.header,
       kicker:document.getElementById('editKicker').value,
       title:document.getElementById('editTitle').value,
       subtitle:document.getElementById('editSubtitle').value,
@@ -1666,7 +1828,8 @@
       masteredLabel:document.getElementById('editMasteredLabel').value,
       masterPrompt:document.getElementById('editMasterPrompt').value,
       footerNote:document.getElementById('editFooterNote').value,
-      showSummary:document.getElementById('editShowSummary').checked
+      showSummary:document.getElementById('editShowSummary').checked,
+      summaryPositions
     };
     design.theme.headerBgMode = document.getElementById('editHeaderBgMode').value;
     design.theme.headerBgColor = document.getElementById('editHeaderBgColor').value;
@@ -1899,6 +2062,14 @@
 
   document.querySelectorAll('[data-close-dialog]').forEach((button) => {
     button.addEventListener('click', () => button.closest('dialog').close());
+  });
+
+  document.querySelectorAll('.summary-move-handle').forEach((handle) => {
+    handle.addEventListener('pointerdown',startSummaryDrag);
+    handle.addEventListener('pointermove',moveSummaryDrag);
+    handle.addEventListener('pointerup',finishSummaryDrag);
+    handle.addEventListener('pointercancel',finishSummaryDrag);
+    handle.addEventListener('keydown',nudgeSummaryBox);
   });
 
   document.getElementById('exportBtn').addEventListener('click', exportBackup);

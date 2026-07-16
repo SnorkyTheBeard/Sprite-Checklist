@@ -27,12 +27,14 @@
       <p class="sub" id="heroSubtitle" hidden></p>
 
       <div class="summary" role="group" aria-label="Overall progress">
-        <div>
+        <div id="collectedSummaryBox" class="summary-box" data-summary-box="collected">
+          <button class="summary-move-handle editor-only" type="button" aria-label="Move In Collection box">Move</button>
           <strong id="collectedTotal">0 / 0</strong>
           <span id="collectedLabel">In Collection</span>
           <span class="progress-track" aria-hidden="true"><i id="collectedBar"></i></span>
         </div>
-        <div>
+        <div id="masteredSummaryBox" class="summary-box" data-summary-box="mastered">
+          <button class="summary-move-handle editor-only" type="button" aria-label="Move Mastered box">Move</button>
           <strong id="masteredTotal">0 / 0</strong>
           <span id="masteredLabel">Mastered</span>
           <span class="progress-track" aria-hidden="true"><i id="masteredBar"></i></span>
@@ -253,6 +255,14 @@
         <label>Footer note<input id="editFooterNote" type="text"></label>
         <label class="check-field"><input id="editShowSummary" type="checkbox"> Show progress summary</label>
         <p class="field-help">Leave any text box empty to remove that text from the page.</p>
+
+        <details class="editor-subsection">
+          <summary>Progress box positions</summary>
+          <div class="editor-subsection-body">
+            <label>Placement<select id="editSummaryPositionMode"><option value="flow">Default centered position</option><option value="free">Custom positions</option></select></label>
+            <p class="field-help">In Edit Mode, drag the Move handle on either progress box to place it independently. On phones, only the handle moves the box, so swiping elsewhere still scrolls the page. Choose Default centered position here to reset both boxes.</p>
+          </div>
+        </details>
 
         <details class="editor-subsection" open>
           <summary>Header image and box style</summary>
