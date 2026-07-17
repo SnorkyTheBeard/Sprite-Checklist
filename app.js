@@ -45,6 +45,13 @@
     custom:{ label:'My uploaded font', css:'"UserCustomFont",sans-serif' }
   };
 
+  const SUMMARY_FONT_OPTIONS = {
+    body:{ label:'Use body font', css:'var(--font-body)' },
+    heading:{ label:'Use heading font', css:'var(--font-heading)' },
+    button:{ label:'Use button font', css:'var(--font-button)' },
+    ...FONT_OPTIONS
+  };
+
   const DEFAULT_THEME = {
     bodyFont:'system', headingFont:'system', buttonFont:'system', customFontData:'', customFontName:'',
     baseSize:16, titleSize:48, pageTitleSize:34, groupTitleSize:20, spriteLabelSize:16, checklistButtonSize:16, textColor:'#ffffff', mutedColor:'#c8c3e5',
@@ -53,7 +60,9 @@
     collectionBgColor:'#f3dfb4', collectionBgImage:'', collectionBgMode:'cover', useBuiltInCollectionArt:true, collectionTextColor:'#2a2144', collectionBorderColor:'#ffe097', collectionRadius:24,
     cardBgColor:'#fffaf0', cardBgImage:'', cardBgMode:'cover', cardTextColor:'#33234e', cardBorderColor:'#bca8cf', cardRadius:20,
     wellBgColor:'#e7ddfa', wellBgImage:'', wellBgMode:'cover', useBuiltInWellArt:true, wellBorderColor:'#b9a8d5',
-    tabBgColor:'#14133d', tabActiveColor:'#ffcf55', summaryBgColor:'#302b5c', buttonBgColor:'#ffffff', buttonTextColor:'#33234e', accentColor:'#59c8ff',
+    tabBgColor:'#14133d', tabActiveColor:'#ffcf55',
+    summaryStyle:'text', summaryFont:'body', summaryTextEffect:'shadow', summaryEffectColor:'#000000', summaryEffectStrength:6, summaryNumberSize:20, summaryLabelSize:12, summaryNumberColor:'#ffffff', summaryLabelColor:'#c8c3e5', summaryBgColor:'#302b5c', summaryBorderColor:'#564d80', summaryRadius:16, summaryOpacity:100, summaryShowBars:false,
+    buttonBgColor:'#ffffff', buttonTextColor:'#33234e', accentColor:'#59c8ff',
     leftArt:'', rightArt:'', artWidth:120,
     pageBackgrounds:Object.fromEntries(rarities.map((rarity) => [rarity,{ enabled:false, color:'#080a24', image:'', mode:'cover' }]))
   };
@@ -326,6 +335,14 @@
     return `rgba(${red},${green},${blue},${Math.max(0,Math.min(100,Number(percentage))) / 100})`;
   }
 
+  function summaryTextShadow(theme) {
+    const strength = clamp(Number(theme.summaryEffectStrength) || 0,0,20);
+    if (!strength || theme.summaryTextEffect === 'none') return 'none';
+    const color = theme.summaryEffectColor || '#000000';
+    if (theme.summaryTextEffect === 'glow') return `0 0 ${Math.max(2,Math.round(strength / 2))}px ${color},0 0 ${strength}px ${color}`;
+    return `0 2px ${strength}px ${colorWithOpacity(color,75)}`;
+  }
+
   function applyCustomBackground(element, color, image, mode) {
     element.style.backgroundColor = color;
     element.style.backgroundImage = image ? `url("${image}")` : 'none';
@@ -353,6 +370,7 @@
     root.style.setProperty('--font-body',FONT_OPTIONS[theme.bodyFont]?.css || FONT_OPTIONS.system.css);
     root.style.setProperty('--font-heading',FONT_OPTIONS[theme.headingFont]?.css || FONT_OPTIONS.system.css);
     root.style.setProperty('--font-button',FONT_OPTIONS[theme.buttonFont]?.css || FONT_OPTIONS.system.css);
+    root.style.setProperty('--font-summary',SUMMARY_FONT_OPTIONS[theme.summaryFont]?.css || SUMMARY_FONT_OPTIONS.body.css);
     root.style.setProperty('--theme-base-size',`${theme.baseSize}px`);
     root.style.setProperty('--theme-title-size',`${theme.titleSize}px`);
     root.style.setProperty('--theme-page-title-size',`${theme.pageTitleSize}px`);
@@ -382,6 +400,14 @@
     root.style.setProperty('--theme-tab-bg',theme.tabBgColor);
     root.style.setProperty('--theme-tab-active',theme.tabActiveColor);
     root.style.setProperty('--theme-summary-bg',theme.summaryBgColor);
+    root.style.setProperty('--theme-summary-surface',colorWithOpacity(theme.summaryBgColor,theme.summaryOpacity));
+    root.style.setProperty('--theme-summary-border',theme.summaryBorderColor);
+    root.style.setProperty('--theme-summary-number',theme.summaryNumberColor);
+    root.style.setProperty('--theme-summary-label',theme.summaryLabelColor);
+    root.style.setProperty('--theme-summary-radius',`${theme.summaryRadius}px`);
+    root.style.setProperty('--theme-summary-number-size',`${theme.summaryNumberSize}px`);
+    root.style.setProperty('--theme-summary-label-size',`${theme.summaryLabelSize}px`);
+    root.style.setProperty('--theme-summary-text-shadow',summaryTextShadow(theme));
     root.style.setProperty('--theme-button-bg',theme.buttonBgColor);
     root.style.setProperty('--theme-button-text',theme.buttonTextColor);
     root.style.setProperty('--theme-accent',theme.accentColor);
@@ -395,6 +421,9 @@
     root.style.setProperty('--theme-page-bg',pageTheme.enabled ? pageTheme.color : 'transparent');
     applyImageSurface(root,'page',pageTheme.enabled ? pageTheme.image : '',pageTheme.mode);
     document.body.classList.toggle('hide-stars',!theme.showStars);
+    const hero = document.getElementById('hero');
+    hero.classList.toggle('summary-text-only',theme.summaryStyle !== 'boxed');
+    hero.classList.toggle('summary-bars-hidden',!theme.summaryShowBars);
     const leftArt = document.getElementById('leftCustomArt');
     const rightArt = document.getElementById('rightCustomArt');
     leftArt.src = theme.leftArt || '';
@@ -414,8 +443,8 @@
     summary.hidden = !design.header.showSummary && !editMode;
     summary.classList.toggle('is-hidden-editor', !design.header.showSummary);
     applySummaryPositions();
-    document.querySelector('[data-summary-box="collected"] .summary-move-handle').setAttribute('aria-label',`Move ${design.header.collectedLabel || 'collected'} box`);
-    document.querySelector('[data-summary-box="mastered"] .summary-move-handle').setAttribute('aria-label',`Move ${design.header.masteredLabel || 'mastered'} box`);
+    document.querySelector('[data-summary-box="collected"] .summary-move-handle').setAttribute('aria-label',`Move ${design.header.collectedLabel || 'collected'} text`);
+    document.querySelector('[data-summary-box="mastered"] .summary-move-handle').setAttribute('aria-label',`Move ${design.header.masteredLabel || 'mastered'} text`);
     document.title = design.header.title || 'Sprite Checklist';
   }
 
@@ -1081,7 +1110,9 @@
     themeCollectionBgColor:'collectionBgColor', themeCollectionTextColor:'collectionTextColor', themeCollectionBorderColor:'collectionBorderColor', themeCollectionRadius:'collectionRadius', themeCollectionBgMode:'collectionBgMode', themeUseBuiltInCollectionArt:'useBuiltInCollectionArt',
     themeCardBgColor:'cardBgColor', themeCardTextColor:'cardTextColor', themeCardBorderColor:'cardBorderColor', themeCardRadius:'cardRadius', themeCardBgMode:'cardBgMode',
     themeWellBgColor:'wellBgColor', themeWellBorderColor:'wellBorderColor', themeWellBgMode:'wellBgMode', themeUseBuiltInWellArt:'useBuiltInWellArt',
-    themeTabBgColor:'tabBgColor', themeTabActiveColor:'tabActiveColor', themeSummaryBgColor:'summaryBgColor', themeButtonBgColor:'buttonBgColor', themeButtonTextColor:'buttonTextColor', themeAccentColor:'accentColor',
+    themeTabBgColor:'tabBgColor', themeTabActiveColor:'tabActiveColor',
+    themeSummaryStyle:'summaryStyle', themeSummaryFont:'summaryFont', themeSummaryTextEffect:'summaryTextEffect', themeSummaryEffectColor:'summaryEffectColor', themeSummaryEffectStrength:'summaryEffectStrength', themeSummaryNumberSize:'summaryNumberSize', themeSummaryLabelSize:'summaryLabelSize', themeSummaryNumberColor:'summaryNumberColor', themeSummaryLabelColor:'summaryLabelColor', themeSummaryBgColor:'summaryBgColor', themeSummaryBorderColor:'summaryBorderColor', themeSummaryRadius:'summaryRadius', themeSummaryOpacity:'summaryOpacity', themeSummaryShowBars:'summaryShowBars',
+    themeButtonBgColor:'buttonBgColor', themeButtonTextColor:'buttonTextColor', themeAccentColor:'accentColor',
     themeArtWidth:'artWidth'
   };
 
@@ -1104,6 +1135,15 @@
         select.appendChild(element);
       });
     });
+    document.querySelectorAll('[data-summary-font-select]').forEach((select) => {
+      select.innerHTML = '';
+      Object.entries(SUMMARY_FONT_OPTIONS).forEach(([value,option]) => {
+        const element = document.createElement('option');
+        element.value = value;
+        element.textContent = option.label;
+        select.appendChild(element);
+      });
+    });
   }
 
   function updateStudioOutputs() {
@@ -1119,6 +1159,11 @@
       themeHeaderHeightOutput:Number(document.getElementById('themeHeaderHeight').value) ? `${document.getElementById('themeHeaderHeight').value}px` : 'Auto',
       themeCollectionRadiusOutput:`${document.getElementById('themeCollectionRadius').value}px`,
       themeCardRadiusOutput:`${document.getElementById('themeCardRadius').value}px`,
+      themeSummaryEffectStrengthOutput:`${document.getElementById('themeSummaryEffectStrength').value}px`,
+      themeSummaryNumberSizeOutput:`${document.getElementById('themeSummaryNumberSize').value}px`,
+      themeSummaryLabelSizeOutput:`${document.getElementById('themeSummaryLabelSize').value}px`,
+      themeSummaryRadiusOutput:`${document.getElementById('themeSummaryRadius').value}px`,
+      themeSummaryOpacityOutput:`${document.getElementById('themeSummaryOpacity').value}%`,
       themeArtWidthOutput:`${document.getElementById('themeArtWidth').value}px`
     };
     Object.entries(outputs).forEach(([id,value]) => { document.getElementById(id).textContent = value; });
@@ -1175,6 +1220,14 @@
     preview.querySelector('span').hidden = Boolean(source);
   }
 
+  function updateHeaderSummaryOutputs() {
+    document.getElementById('editSummaryEffectStrengthOutput').textContent = `${document.getElementById('editSummaryEffectStrength').value}px`;
+    document.getElementById('editSummaryNumberSizeOutput').textContent = `${document.getElementById('editSummaryNumberSize').value}px`;
+    document.getElementById('editSummaryLabelSizeOutput').textContent = `${document.getElementById('editSummaryLabelSize').value}px`;
+    document.getElementById('editSummaryRadiusOutput').textContent = `${document.getElementById('editSummaryRadius').value}px`;
+    document.getElementById('editSummaryOpacityOutput').textContent = `${document.getElementById('editSummaryOpacity').value}%`;
+  }
+
   function openHeaderEditor() {
     pendingHeaderBgImage = undefined;
     document.getElementById('editKicker').value = design.header.kicker;
@@ -1186,6 +1239,20 @@
     document.getElementById('editFooterNote').value = design.header.footerNote;
     document.getElementById('editShowSummary').checked = design.header.showSummary;
     document.getElementById('editSummaryPositionMode').value = design.header.summaryPositions?.mode === 'free' ? 'free' : 'flow';
+    document.getElementById('editSummaryStyle').value = design.theme.summaryStyle;
+    document.getElementById('editSummaryFont').value = design.theme.summaryFont;
+    document.getElementById('editSummaryTextEffect').value = design.theme.summaryTextEffect;
+    document.getElementById('editSummaryEffectColor').value = design.theme.summaryEffectColor;
+    document.getElementById('editSummaryEffectStrength').value = design.theme.summaryEffectStrength;
+    document.getElementById('editSummaryNumberSize').value = design.theme.summaryNumberSize;
+    document.getElementById('editSummaryLabelSize').value = design.theme.summaryLabelSize;
+    document.getElementById('editSummaryNumberColor').value = design.theme.summaryNumberColor;
+    document.getElementById('editSummaryLabelColor').value = design.theme.summaryLabelColor;
+    document.getElementById('editSummaryBgColor').value = design.theme.summaryBgColor;
+    document.getElementById('editSummaryBorderColor').value = design.theme.summaryBorderColor;
+    document.getElementById('editSummaryRadius').value = design.theme.summaryRadius;
+    document.getElementById('editSummaryOpacity').value = design.theme.summaryOpacity;
+    document.getElementById('editSummaryShowBars').checked = Boolean(design.theme.summaryShowBars);
     document.getElementById('editHeaderBgFile').value = '';
     document.getElementById('editHeaderBgMode').value = design.theme.headerBgMode;
     document.getElementById('editHeaderBgColor').value = design.theme.headerBgColor;
@@ -1197,6 +1264,7 @@
     document.getElementById('editHeaderRadiusOutput').textContent = `${design.theme.headerRadius}px`;
     document.getElementById('editHeaderOpacityOutput').textContent = `${design.theme.headerOpacity}%`;
     document.getElementById('editHeaderHeightOutput').textContent = design.theme.headerHeight ? `${design.theme.headerHeight}px` : 'Auto';
+    updateHeaderSummaryOutputs();
     updateHeaderImagePreview();
     resetEditorStatus(document.getElementById('headerEditorForm'));
     document.getElementById('headerEditorDialog').showModal();
@@ -1827,6 +1895,9 @@
   document.getElementById('editHeaderHeight').addEventListener('input', (event) => {
     document.getElementById('editHeaderHeightOutput').textContent = Number(event.currentTarget.value) ? `${event.currentTarget.value}px` : 'Auto';
   });
+  ['editSummaryEffectStrength','editSummaryNumberSize','editSummaryLabelSize','editSummaryRadius','editSummaryOpacity'].forEach((id) => {
+    document.getElementById(id).addEventListener('input',updateHeaderSummaryOutputs);
+  });
 
   document.getElementById('headerEditorForm').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -1854,6 +1925,20 @@
     design.theme.headerRadius = Number(document.getElementById('editHeaderRadius').value);
     design.theme.headerOpacity = Number(document.getElementById('editHeaderOpacity').value);
     design.theme.headerHeight = Number(document.getElementById('editHeaderHeight').value);
+    design.theme.summaryStyle = document.getElementById('editSummaryStyle').value;
+    design.theme.summaryFont = document.getElementById('editSummaryFont').value;
+    design.theme.summaryTextEffect = document.getElementById('editSummaryTextEffect').value;
+    design.theme.summaryEffectColor = document.getElementById('editSummaryEffectColor').value;
+    design.theme.summaryEffectStrength = Number(document.getElementById('editSummaryEffectStrength').value);
+    design.theme.summaryNumberSize = Number(document.getElementById('editSummaryNumberSize').value);
+    design.theme.summaryLabelSize = Number(document.getElementById('editSummaryLabelSize').value);
+    design.theme.summaryNumberColor = document.getElementById('editSummaryNumberColor').value;
+    design.theme.summaryLabelColor = document.getElementById('editSummaryLabelColor').value;
+    design.theme.summaryBgColor = document.getElementById('editSummaryBgColor').value;
+    design.theme.summaryBorderColor = document.getElementById('editSummaryBorderColor').value;
+    design.theme.summaryRadius = Number(document.getElementById('editSummaryRadius').value);
+    design.theme.summaryOpacity = Number(document.getElementById('editSummaryOpacity').value);
+    design.theme.summaryShowBars = document.getElementById('editSummaryShowBars').checked;
     if (pendingHeaderBgImage !== undefined) design.theme.headerBgImage = pendingHeaderBgImage;
     if (!saveDesign()) return;
     finishEditorSave('headerEditorDialog','Header changes saved');

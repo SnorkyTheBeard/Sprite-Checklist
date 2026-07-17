@@ -20,7 +20,7 @@
   <a class="skip-link" href="#collections">Skip to checklist</a>
 
   <div class="app-shell">
-    <header class="hero" id="hero">
+    <header class="hero summary-text-only summary-bars-hidden" id="hero">
       <button class="edit-chip editor-only" id="editHeaderBtn" type="button">Edit header</button>
       <p class="kicker" id="heroKicker" hidden></p>
       <h1 id="heroTitle">Fortnite Sprite Tracker</h1>
@@ -28,13 +28,13 @@
 
       <div class="summary" role="group" aria-label="Overall progress">
         <div id="collectedSummaryBox" class="summary-box" data-summary-box="collected">
-          <button class="summary-move-handle editor-only" type="button" aria-label="Move In Collection box">Move</button>
+          <button class="summary-move-handle editor-only" type="button" aria-label="Move In Collection text">Move</button>
           <strong id="collectedTotal">0 / 0</strong>
           <span id="collectedLabel">In Collection</span>
           <span class="progress-track" aria-hidden="true"><i id="collectedBar"></i></span>
         </div>
         <div id="masteredSummaryBox" class="summary-box" data-summary-box="mastered">
-          <button class="summary-move-handle editor-only" type="button" aria-label="Move Mastered box">Move</button>
+          <button class="summary-move-handle editor-only" type="button" aria-label="Move Mastered text">Move</button>
           <strong id="masteredTotal">0 / 0</strong>
           <span id="masteredLabel">Mastered</span>
           <span class="progress-track" aria-hidden="true"><i id="masteredBar"></i></span>
@@ -212,14 +212,30 @@
         </details>
 
         <details>
-          <summary>Tabs, counters, and buttons</summary>
-          <div class="studio-section field-grid">
-            <label>Tab color<input id="themeTabBgColor" type="color"></label>
-            <label>Selected tab color<input id="themeTabActiveColor" type="color"></label>
-            <label>Progress-box color<input id="themeSummaryBgColor" type="color"></label>
-            <label>Button color<input id="themeButtonBgColor" type="color"></label>
-            <label>Button text<input id="themeButtonTextColor" type="color"></label>
-            <label>Check/accent color<input id="themeAccentColor" type="color"></label>
+          <summary>Tabs, progress text, and buttons</summary>
+          <div class="studio-section">
+            <p class="field-help">Text only places In Collection and Mastered directly on the header. Choose Boxed only when you want a separate background behind each counter.</p>
+            <div class="field-grid">
+              <label>Progress style<select id="themeSummaryStyle"><option value="text">Text only</option><option value="boxed">Boxed</option></select></label>
+              <label>Progress font<select id="themeSummaryFont" data-summary-font-select></select></label>
+              <label>Text effect<select id="themeSummaryTextEffect"><option value="shadow">Soft shadow</option><option value="glow">Glow</option><option value="none">None</option></select></label>
+              <label>Effect color<input id="themeSummaryEffectColor" type="color"></label>
+              <label>Effect strength<input id="themeSummaryEffectStrength" type="range" min="0" max="20" step="1"><span class="range-output" id="themeSummaryEffectStrengthOutput"></span></label>
+              <label>Number size<input id="themeSummaryNumberSize" type="range" min="14" max="42" step="1"><span class="range-output" id="themeSummaryNumberSizeOutput"></span></label>
+              <label>Label size<input id="themeSummaryLabelSize" type="range" min="9" max="26" step="1"><span class="range-output" id="themeSummaryLabelSizeOutput"></span></label>
+              <label>Number color<input id="themeSummaryNumberColor" type="color"></label>
+              <label>Label color<input id="themeSummaryLabelColor" type="color"></label>
+              <label>Box color<input id="themeSummaryBgColor" type="color"></label>
+              <label>Box border<input id="themeSummaryBorderColor" type="color"></label>
+              <label>Box roundness<input id="themeSummaryRadius" type="range" min="0" max="30" step="1"><span class="range-output" id="themeSummaryRadiusOutput"></span></label>
+              <label>Box opacity<input id="themeSummaryOpacity" type="range" min="0" max="100" step="1"><span class="range-output" id="themeSummaryOpacityOutput"></span></label>
+              <label>Tab color<input id="themeTabBgColor" type="color"></label>
+              <label>Selected tab color<input id="themeTabActiveColor" type="color"></label>
+              <label>Button color<input id="themeButtonBgColor" type="color"></label>
+              <label>Button text<input id="themeButtonTextColor" type="color"></label>
+              <label>Check/accent color<input id="themeAccentColor" type="color"></label>
+            </div>
+            <label class="check-field"><input id="themeSummaryShowBars" type="checkbox"> Show progress lines beneath the text</label>
           </div>
         </details>
 
@@ -256,11 +272,34 @@
         <label class="check-field"><input id="editShowSummary" type="checkbox"> Show progress summary</label>
         <p class="field-help">Leave any text box empty to remove that text from the page.</p>
 
+        <details class="editor-subsection" open>
+          <summary>Progress text and style</summary>
+          <div class="editor-subsection-body">
+            <p class="field-help">Text only removes the background and border so the two counters sit directly on the header artwork.</p>
+            <div class="field-grid">
+              <label>Style<select id="editSummaryStyle"><option value="text">Text only</option><option value="boxed">Boxed</option></select></label>
+              <label>Font<select id="editSummaryFont" data-summary-font-select></select></label>
+              <label>Text effect<select id="editSummaryTextEffect"><option value="shadow">Soft shadow</option><option value="glow">Glow</option><option value="none">None</option></select></label>
+              <label>Effect color<input id="editSummaryEffectColor" type="color"></label>
+              <label>Effect strength<input id="editSummaryEffectStrength" type="range" min="0" max="20" step="1"><span class="range-output" id="editSummaryEffectStrengthOutput"></span></label>
+              <label>Number size<input id="editSummaryNumberSize" type="range" min="14" max="42" step="1"><span class="range-output" id="editSummaryNumberSizeOutput"></span></label>
+              <label>Label size<input id="editSummaryLabelSize" type="range" min="9" max="26" step="1"><span class="range-output" id="editSummaryLabelSizeOutput"></span></label>
+              <label>Number color<input id="editSummaryNumberColor" type="color"></label>
+              <label>Label color<input id="editSummaryLabelColor" type="color"></label>
+              <label>Box color<input id="editSummaryBgColor" type="color"></label>
+              <label>Box border<input id="editSummaryBorderColor" type="color"></label>
+              <label>Box roundness<input id="editSummaryRadius" type="range" min="0" max="30" step="1"><span class="range-output" id="editSummaryRadiusOutput"></span></label>
+              <label>Box opacity<input id="editSummaryOpacity" type="range" min="0" max="100" step="1"><span class="range-output" id="editSummaryOpacityOutput"></span></label>
+            </div>
+            <label class="check-field"><input id="editSummaryShowBars" type="checkbox"> Show progress lines beneath the text</label>
+          </div>
+        </details>
+
         <details class="editor-subsection">
-          <summary>Progress box positions</summary>
+          <summary>Progress text positions</summary>
           <div class="editor-subsection-body">
             <label>Placement<select id="editSummaryPositionMode"><option value="flow">Default centered position</option><option value="free">Custom positions</option></select></label>
-            <p class="field-help">In Edit Mode, drag the Move handle on either progress box to place it independently. On phones, only the handle moves the box, so swiping elsewhere still scrolls the page. Choose Default centered position here to reset both boxes.</p>
+            <p class="field-help">In Edit Mode, drag the Move handle on either counter to place it independently. On phones, only the handle moves it, so swiping elsewhere still scrolls the page. Choose Default centered position here to reset both counters.</p>
           </div>
         </details>
 
