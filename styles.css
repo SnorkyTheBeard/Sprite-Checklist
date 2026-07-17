@@ -460,6 +460,12 @@ body.hide-stars::before { display:none; }
 @media (max-width:760px) {
   .custom-art { width:min(var(--theme-art-width),22vw); }
   #checklistPage { padding-inline:4px; }
+  .variant-row { padding-inline:0; scroll-padding-inline:0; }
+  .card { min-width:0; flex-basis:calc((100% - 12px) / 2); }
+}
+
+@media (max-width:340px) {
+  .card { flex-basis:100%; }
 }
 
 @supports (-webkit-touch-callout:none) {

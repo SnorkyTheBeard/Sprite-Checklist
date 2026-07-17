@@ -1281,26 +1281,42 @@
       const maxWidth = settings.width;
       const maxHeight = settings.height;
       const targetBytes = settings.maxBytes || 260000;
+      const sourceType = String(file.type || '').toLowerCase();
+      const preserveSource = ['image/png','image/jpeg','image/webp','image/avif'].includes(sourceType)
+        && image.naturalWidth <= maxWidth
+        && image.naturalHeight <= maxHeight
+        && file.size <= targetBytes;
+      if (preserveSource) return readFileAsDataUrl(file);
+
       let scale = Math.min(1,maxWidth / image.naturalWidth,maxHeight / image.naturalHeight);
-      let quality = .84;
+      const startingQuality = settings.quality || .92;
+      const minimumQuality = settings.minQuality || .78;
+      let quality = startingQuality;
       let bestResult = '';
+      let bestBytes = Infinity;
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
       if (!context) throw new Error('canvas-unavailable');
-      for (let attempt = 0; attempt < 8; attempt += 1) {
+      for (let attempt = 0; attempt < 18; attempt += 1) {
         canvas.width = Math.max(1,Math.round(image.naturalWidth * scale));
         canvas.height = Math.max(1,Math.round(image.naturalHeight * scale));
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
         context.clearRect(0,0,canvas.width,canvas.height);
         context.drawImage(image,0,0,canvas.width,canvas.height);
-        bestResult = canvas.toDataURL('image/webp',quality);
-        const encodedLength = Math.max(0,bestResult.length - bestResult.indexOf(',') - 1);
+        const result = canvas.toDataURL('image/webp',quality);
+        const encodedLength = Math.max(0,result.length - result.indexOf(',') - 1);
         const estimatedBytes = Math.ceil(encodedLength * .75);
-        if (estimatedBytes <= targetBytes) return bestResult;
-        if (quality > .58) quality = Math.max(.58,quality - .13);
+        if (estimatedBytes < bestBytes) {
+          bestResult = result;
+          bestBytes = estimatedBytes;
+        }
+        if (estimatedBytes <= targetBytes) return result;
+        if (quality > minimumQuality) quality = Math.max(minimumQuality,quality - .04);
         else {
-          const shrink = Math.max(.68,Math.min(.88,Math.sqrt(targetBytes / estimatedBytes) * .94));
+          const shrink = Math.max(.72,Math.min(.92,Math.sqrt(targetBytes / estimatedBytes) * .97));
           scale *= shrink;
-          quality = .72;
+          quality = startingQuality;
         }
       }
       return bestResult;
@@ -1311,17 +1327,17 @@
 
   function artworkBounds(area) {
     const sizes = {
-      bodyBgImage:{ width:1920, height:1440, maxBytes:420000 },
-      headerBgImage:{ width:1600, height:700, maxBytes:300000 },
-      collectionBgImage:{ width:1600, height:900, maxBytes:320000 },
-      cardBgImage:{ width:900, height:1100, maxBytes:220000 },
-      wellBgImage:{ width:900, height:900, maxBytes:220000 },
-      leftArt:{ width:800, height:1800, maxBytes:320000 },
-      rightArt:{ width:800, height:1800, maxBytes:320000 },
-      page:{ width:1920, height:1440, maxBytes:420000 },
-      group:{ width:1600, height:900, maxBytes:320000 },
-      card:{ width:900, height:1100, maxBytes:220000 },
-      sprite:{ width:900, height:900, maxBytes:220000 }
+      bodyBgImage:{ width:2560, height:2560, maxBytes:700000, quality:.94, minQuality:.8 },
+      headerBgImage:{ width:2000, height:1000, maxBytes:560000, quality:.94, minQuality:.8 },
+      collectionBgImage:{ width:2000, height:1400, maxBytes:560000, quality:.94, minQuality:.8 },
+      cardBgImage:{ width:1200, height:1500, maxBytes:340000, quality:.92, minQuality:.78 },
+      wellBgImage:{ width:1200, height:1200, maxBytes:320000, quality:.92, minQuality:.78 },
+      leftArt:{ width:1200, height:2400, maxBytes:520000, quality:.92, minQuality:.78 },
+      rightArt:{ width:1200, height:2400, maxBytes:520000, quality:.92, minQuality:.78 },
+      page:{ width:2560, height:2560, maxBytes:700000, quality:.94, minQuality:.8 },
+      group:{ width:2000, height:1400, maxBytes:560000, quality:.94, minQuality:.8 },
+      card:{ width:1200, height:1500, maxBytes:340000, quality:.92, minQuality:.78 },
+      sprite:{ width:1200, height:1200, maxBytes:320000, quality:.92, minQuality:.78 }
     };
     return sizes[area] || { width:1200, height:1200, maxBytes:260000 };
   }
