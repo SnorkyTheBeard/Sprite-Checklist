@@ -57,14 +57,15 @@
     baseSize:16, titleSize:48, pageTitleSize:34, groupTitleSize:20, spriteLabelSize:16, checklistButtonSize:16, textColor:'#ffffff', mutedColor:'#c8c3e5',
     bodyBgColor:'#080a24', bodyBgImage:'', bodyBgMode:'cover', useBuiltInBodyArt:true, showStars:true,
     headerBgColor:'#21184d', headerBgImage:'', headerBgMode:'cover', headerTextColor:'#ffffff', headerBorderColor:'#564d80', headerRadius:24, headerOpacity:90, headerHeight:0,
-    collectionBgColor:'#f3dfb4', collectionBgImage:'', collectionBgMode:'cover', useBuiltInCollectionArt:true, collectionTextColor:'#2a2144', collectionBorderColor:'#ffe097', collectionRadius:24,
+    collectionStyle:'open', collectionBgColor:'#f3dfb4', collectionBgImage:'', collectionBgMode:'cover', useBuiltInCollectionArt:true, collectionTextColor:'#2a2144', collectionBorderColor:'#ffe097', collectionRadius:24,
     cardBgColor:'#fffaf0', cardBgImage:'', cardBgMode:'cover', cardTextColor:'#33234e', cardBorderColor:'#bca8cf', cardRadius:20,
     wellBgColor:'#e7ddfa', wellBgImage:'', wellBgMode:'cover', useBuiltInWellArt:true, wellBorderColor:'#b9a8d5',
     tabBgColor:'#14133d', tabActiveColor:'#ffcf55',
     summaryStyle:'text', summaryFont:'body', summaryTextEffect:'shadow', summaryEffectColor:'#000000', summaryEffectStrength:6, summaryNumberSize:20, summaryLabelSize:12, summaryNumberColor:'#ffffff', summaryLabelColor:'#c8c3e5', summaryBgColor:'#302b5c', summaryBorderColor:'#564d80', summaryRadius:16, summaryOpacity:100, summaryShowBars:false,
     buttonBgColor:'#ffffff', buttonTextColor:'#33234e', accentColor:'#59c8ff',
     leftArt:'', rightArt:'', artWidth:120,
-    pageBackgrounds:Object.fromEntries(rarities.map((rarity) => [rarity,{ enabled:false, color:'#080a24', image:'', mode:'cover' }]))
+    pageBackgrounds:Object.fromEntries(rarities.map((rarity) => [rarity,{ enabled:false, color:'#080a24', image:'', mode:'cover' }])),
+    pageHeaderBackgrounds:Object.fromEntries(rarities.map((rarity) => [rarity,{ enabled:false, image:'', mode:'cover' }]))
   };
 
   let activeRarity = rarityFromHash() || defaultRarity;
@@ -79,6 +80,7 @@
   let pendingVariantCardImage;
   let pendingFamilyBgImage;
   let pendingPageBgImage;
+  let pendingPageHeaderBgImage;
   let pendingHeaderBgImage;
   let publishedDesignFile;
   let publishedDesignContents = '';
@@ -155,7 +157,8 @@
       theme:{
         ...DEFAULT_THEME,
         ...storedTheme,
-        pageBackgrounds:Object.fromEntries(rarities.map((rarity) => [rarity,{ ...DEFAULT_THEME.pageBackgrounds[rarity], ...(storedTheme.pageBackgrounds?.[rarity] || {}) }]))
+        pageBackgrounds:Object.fromEntries(rarities.map((rarity) => [rarity,{ ...DEFAULT_THEME.pageBackgrounds[rarity], ...(storedTheme.pageBackgrounds?.[rarity] || {}) }])),
+        pageHeaderBackgrounds:Object.fromEntries(rarities.map((rarity) => [rarity,{ ...DEFAULT_THEME.pageHeaderBackgrounds[rarity], ...(storedTheme.pageHeaderBackgrounds?.[rarity] || {}) }]))
       }
     };
   }
@@ -413,7 +416,8 @@
     root.style.setProperty('--theme-accent',theme.accentColor);
     root.style.setProperty('--theme-art-width',`${theme.artWidth}px`);
     applyImageSurface(root,'body',theme.bodyBgImage,theme.bodyBgMode,theme.useBuiltInBodyArt);
-    applyImageSurface(root,'header',theme.headerBgImage,theme.headerBgMode);
+    const pageHeaderTheme = theme.pageHeaderBackgrounds?.[activeRarity] || DEFAULT_THEME.pageHeaderBackgrounds[activeRarity];
+    applyImageSurface(root,'header',pageHeaderTheme.enabled ? pageHeaderTheme.image : theme.headerBgImage,pageHeaderTheme.enabled ? pageHeaderTheme.mode : theme.headerBgMode);
     applyImageSurface(root,'collection',theme.collectionBgImage,theme.collectionBgMode,theme.useBuiltInCollectionArt);
     applyImageSurface(root,'card',theme.cardBgImage,theme.cardBgMode);
     applyImageSurface(root,'well',theme.wellBgImage,theme.wellBgMode,theme.useBuiltInWellArt);
@@ -421,6 +425,7 @@
     root.style.setProperty('--theme-page-bg',pageTheme.enabled ? pageTheme.color : 'transparent');
     applyImageSurface(root,'page',pageTheme.enabled ? pageTheme.image : '',pageTheme.mode);
     document.body.classList.toggle('hide-stars',!theme.showStars);
+    document.body.classList.toggle('collection-open',theme.collectionStyle !== 'boxed');
     const hero = document.getElementById('hero');
     hero.classList.toggle('summary-text-only',theme.summaryStyle !== 'boxed');
     hero.classList.toggle('summary-bars-hidden',!theme.summaryShowBars);
@@ -817,7 +822,7 @@
       section.dataset.rarity = family.rarity;
       section.dataset.familyId = family.id;
       section.classList.toggle('is-hidden-editor', !familyInfo.visible);
-      if (familyInfo.customBg) applyCustomBackground(section,familyInfo.bgColor,familyInfo.bgImage,familyInfo.bgMode);
+      if (design.theme.collectionStyle === 'boxed' && familyInfo.customBg) applyCustomBackground(section,familyInfo.bgColor,familyInfo.bgImage,familyInfo.bgMode);
       const title = familyInfo.name || (editMode ? '[No group title]' : '');
       section.innerHTML = `
         <div class="collection-tools editor-only"><button class="edit-chip edit-family-btn" type="button">Edit group</button><button class="edit-chip add-variant-btn" type="button">Add box</button></div>
@@ -1107,7 +1112,7 @@
     themeBaseSize:'baseSize', themeTitleSize:'titleSize', themePageTitleSize:'pageTitleSize', themeGroupTitleSize:'groupTitleSize', themeSpriteLabelSize:'spriteLabelSize', themeChecklistButtonSize:'checklistButtonSize', themeTextColor:'textColor', themeMutedColor:'mutedColor',
     themeBodyBgColor:'bodyBgColor', themeBodyBgMode:'bodyBgMode', themeUseBuiltInBodyArt:'useBuiltInBodyArt', themeShowStars:'showStars',
     themeHeaderBgColor:'headerBgColor', themeHeaderTextColor:'headerTextColor', themeHeaderBorderColor:'headerBorderColor', themeHeaderRadius:'headerRadius', themeHeaderOpacity:'headerOpacity', themeHeaderHeight:'headerHeight', themeHeaderBgMode:'headerBgMode',
-    themeCollectionBgColor:'collectionBgColor', themeCollectionTextColor:'collectionTextColor', themeCollectionBorderColor:'collectionBorderColor', themeCollectionRadius:'collectionRadius', themeCollectionBgMode:'collectionBgMode', themeUseBuiltInCollectionArt:'useBuiltInCollectionArt',
+    themeCollectionStyle:'collectionStyle', themeCollectionBgColor:'collectionBgColor', themeCollectionTextColor:'collectionTextColor', themeCollectionBorderColor:'collectionBorderColor', themeCollectionRadius:'collectionRadius', themeCollectionBgMode:'collectionBgMode', themeUseBuiltInCollectionArt:'useBuiltInCollectionArt',
     themeCardBgColor:'cardBgColor', themeCardTextColor:'cardTextColor', themeCardBorderColor:'cardBorderColor', themeCardRadius:'cardRadius', themeCardBgMode:'cardBgMode',
     themeWellBgColor:'wellBgColor', themeWellBorderColor:'wellBorderColor', themeWellBgMode:'wellBgMode', themeUseBuiltInWellArt:'useBuiltInWellArt',
     themeTabBgColor:'tabBgColor', themeTabActiveColor:'tabActiveColor',
@@ -1176,11 +1181,15 @@
       else field.value = studioDraft[key];
     });
     const page = studioDraft.pageBackgrounds[studioPageRarity];
+    const pageHeader = studioDraft.pageHeaderBackgrounds[studioPageRarity];
     document.getElementById('themePageBgEnabled').checked = page.enabled;
     document.getElementById('themePageBgColor').value = page.color;
     document.getElementById('themePageBgMode').value = page.mode;
+    document.getElementById('themePageHeaderEnabled').checked = pageHeader.enabled;
+    document.getElementById('themePageHeaderMode').value = pageHeader.mode;
     Object.keys(STUDIO_IMAGE_INPUTS).forEach((id) => { document.getElementById(id).value = ''; });
     document.getElementById('themePageBgFile').value = '';
+    document.getElementById('themePageHeaderFile').value = '';
     document.getElementById('themeCustomFontFile').value = '';
     updateStudioOutputs();
   }
@@ -1273,7 +1282,9 @@
   function openPageEditor() {
     const page = design.pages[activeRarity];
     const background = design.theme.pageBackgrounds[activeRarity];
+    const pageHeader = design.theme.pageHeaderBackgrounds[activeRarity];
     pendingPageBgImage = undefined;
+    pendingPageHeaderBgImage = undefined;
     document.getElementById('editPageEyebrow').value = page.eyebrow;
     document.getElementById('editPageTitle').value = page.title;
     document.getElementById('editPageDescription').value = page.description;
@@ -1281,6 +1292,9 @@
     document.getElementById('editPageBgColor').value = background.color;
     document.getElementById('editPageBgMode').value = background.mode;
     document.getElementById('editPageBgFile').value = '';
+    document.getElementById('editPageHeaderEnabled').checked = pageHeader.enabled;
+    document.getElementById('editPageHeaderMode').value = pageHeader.mode;
+    document.getElementById('editPageHeaderFile').value = '';
     resetEditorStatus(document.getElementById('pageEditorForm'));
     document.getElementById('pageEditorDialog').showModal();
   }
@@ -1772,6 +1786,16 @@
     });
   });
 
+  ['themePageHeaderEnabled','themePageHeaderMode'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', (event) => {
+      if (!studioDraft) return;
+      const pageHeader = studioDraft.pageHeaderBackgrounds[studioPageRarity];
+      if (id === 'themePageHeaderEnabled') pageHeader.enabled = event.currentTarget.checked;
+      if (id === 'themePageHeaderMode') pageHeader.mode = event.currentTarget.value;
+      previewStudioDraft();
+    });
+  });
+
   Object.entries(STUDIO_IMAGE_INPUTS).forEach(([id,key]) => {
     document.getElementById(id).addEventListener('change', async (event) => {
       const input = event.currentTarget;
@@ -1803,6 +1827,20 @@
     });
   });
 
+  document.getElementById('themePageHeaderFile').addEventListener('change', async (event) => {
+    const input = event.currentTarget;
+    if (!studioDraft) return;
+    await processEditorImage(input,'Rarity header image',async (file) => {
+      const image = await resizeImage(file,artworkBounds('headerBgImage'));
+      if (!studioDraft) throw new Error('editor-closed');
+      const pageHeader = studioDraft.pageHeaderBackgrounds[studioPageRarity];
+      pageHeader.image = image;
+      pageHeader.enabled = true;
+      document.getElementById('themePageHeaderEnabled').checked = true;
+      previewStudioDraft();
+    });
+  });
+
   document.querySelectorAll('[data-remove-theme-image]').forEach((button) => {
     button.addEventListener('click', () => {
       if (!studioDraft) return;
@@ -1817,6 +1855,17 @@
     studioDraft.pageBackgrounds[studioPageRarity].image = '';
     previewStudioDraft();
     setEditorStatus(document.getElementById('designStudioForm'),'Page artwork will be removed. Tap Apply design to save.','ready');
+  });
+
+  document.getElementById('removePageHeaderBtn').addEventListener('click', () => {
+    if (!studioDraft) return;
+    const pageHeader = studioDraft.pageHeaderBackgrounds[studioPageRarity];
+    pageHeader.image = '';
+    pageHeader.enabled = false;
+    document.getElementById('themePageHeaderEnabled').checked = false;
+    document.getElementById('themePageHeaderFile').value = '';
+    previewStudioDraft();
+    setEditorStatus(document.getElementById('designStudioForm'),'This rarity will use the main header image. Tap Apply design to save.','ready');
   });
 
   document.getElementById('themeCustomFontFile').addEventListener('change', async (event) => {
@@ -1955,6 +2004,19 @@
     pendingPageBgImage = '';
     setEditorStatus(document.getElementById('pageEditorForm'),'Page background will be removed. Tap Save changes to finish.','ready');
   });
+  document.getElementById('editPageHeaderFile').addEventListener('change', async (event) => {
+    const input = event.currentTarget;
+    await processEditorImage(input,'Rarity header image',async (file) => {
+      pendingPageHeaderBgImage = await resizeImage(file,artworkBounds('headerBgImage'));
+      document.getElementById('editPageHeaderEnabled').checked = true;
+    });
+  });
+  document.getElementById('removeEditPageHeaderBtn').addEventListener('click', () => {
+    pendingPageHeaderBgImage = '';
+    document.getElementById('editPageHeaderEnabled').checked = false;
+    document.getElementById('editPageHeaderFile').value = '';
+    setEditorStatus(document.getElementById('pageEditorForm'),'This rarity will use the main header image. Tap Save changes to finish.','ready');
+  });
 
   document.getElementById('pageEditorForm').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -1969,6 +2031,10 @@
     pageBackground.color = document.getElementById('editPageBgColor').value;
     pageBackground.mode = document.getElementById('editPageBgMode').value;
     if (pendingPageBgImage !== undefined) pageBackground.image = pendingPageBgImage;
+    const pageHeader = design.theme.pageHeaderBackgrounds[activeRarity];
+    pageHeader.enabled = document.getElementById('editPageHeaderEnabled').checked;
+    pageHeader.mode = document.getElementById('editPageHeaderMode').value;
+    if (pendingPageHeaderBgImage !== undefined) pageHeader.image = pendingPageHeaderBgImage;
     if (!saveDesign()) return;
     finishEditorSave('pageEditorDialog',`${design.pages[activeRarity].title || activeRarity} page changes saved`);
   });

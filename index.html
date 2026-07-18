@@ -163,15 +163,24 @@
             </div>
             <label>Page background art<input id="themePageBgFile" type="file" accept="image/*"></label>
             <button id="removePageBgBtn" type="button">Remove page background art</button>
+            <p class="studio-subheading">Header image for this rarity</p>
+            <label class="check-field"><input id="themePageHeaderEnabled" type="checkbox"> Use a separate header image on this rarity page</label>
+            <div class="field-grid">
+              <label>Header image fit<select id="themePageHeaderMode"><option value="cover">Cover</option><option value="contain">Contain</option><option value="repeat">Repeat pattern</option><option value="stretch">Stretch</option></select></label>
+            </div>
+            <label>Rarity header image<input id="themePageHeaderFile" type="file" accept="image/*"></label>
+            <button id="removePageHeaderBtn" type="button">Use the main header image instead</button>
           </div>
         </details>
 
         <details>
-          <summary>Sprite collection boxes</summary>
+          <summary>Sprite group container</summary>
           <div class="studio-section">
+            <p class="field-help">Open layout removes the large outer box while keeping every group title, progress count, and sprite card.</p>
             <div class="field-grid">
+              <label>Container style<select id="themeCollectionStyle"><option value="open">Open — no outer box</option><option value="boxed">Boxed</option></select></label>
+              <label>Boxed-layout text color<input id="themeCollectionTextColor" type="color"></label>
               <label>Box color<input id="themeCollectionBgColor" type="color"></label>
-              <label>Text color<input id="themeCollectionTextColor" type="color"></label>
               <label>Border color<input id="themeCollectionBorderColor" type="color"></label>
               <label>Corner roundness<input id="themeCollectionRadius" type="range" min="0" max="50" step="1"><span class="range-output" id="themeCollectionRadiusOutput"></span></label>
               <label>Image fit<select id="themeCollectionBgMode"><option value="cover">Cover</option><option value="contain">Contain</option><option value="repeat">Repeat pattern</option><option value="stretch">Stretch</option></select></label>
@@ -340,6 +349,16 @@
         </div>
         <label>Page background image<input id="editPageBgFile" type="file" accept="image/*"></label>
         <button id="removeEditPageBgBtn" class="secondary-wide" type="button">Remove page background image</button>
+        <details class="editor-subsection" open>
+          <summary>Header image for this rarity</summary>
+          <div class="editor-subsection-body">
+            <label class="check-field"><input id="editPageHeaderEnabled" type="checkbox"> Use a separate header image on this rarity page</label>
+            <label>Header image fit<select id="editPageHeaderMode"><option value="cover">Cover</option><option value="contain">Contain</option><option value="repeat">Repeat pattern</option><option value="stretch">Stretch</option></select></label>
+            <label>Rarity header image<input id="editPageHeaderFile" type="file" accept="image/*"></label>
+            <button id="removeEditPageHeaderBtn" class="secondary-wide" type="button">Use the main header image instead</button>
+            <p class="field-help">Upload a different header for Rare, Epic, Legendary, or Mythic. If this option is off, that rarity uses the main header image from Edit header.</p>
+          </div>
+        </details>
         <p class="field-help">These changes apply only to the rarity page currently open.</p>
         <div class="dialog-actions"><button type="button" data-close-dialog>Cancel</button><button class="primary-btn" type="submit">Save changes</button></div>
       </div>
@@ -361,6 +380,7 @@
         <label>Group box background image<input id="editFamilyBgFile" type="file" accept="image/*"></label>
         <button id="removeFamilyBgBtn" class="secondary-wide" type="button">Remove group background image</button>
         <button id="restoreFamilyBgBtn" class="secondary-wide" type="button">Use main group-box design</button>
+        <p class="field-help">Group backgrounds are saved but are visible only when Design Studio → Sprite group container is set to Boxed.</p>
         <label class="check-field"><input id="editFamilyVisible" type="checkbox"> Show this group in the checklist</label>
         <p class="field-help">Hidden groups remain available while Edit Mode is on so you can restore them.</p>
         <button id="deleteFamilyBtn" class="danger-btn wide-action" type="button">Delete this entire group</button>
