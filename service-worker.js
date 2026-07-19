@@ -1,9 +1,10 @@
-const CACHE = 'galaxy-sprite-checklist-v38';
+const CACHE = 'galaxy-sprite-checklist-v30';
 const CORE = [
   './',
   './index.html',
   './styles.css',
   './published-design.js',
+  './published-assets/theme-body-bg-image.webp',
   './data.js',
   './app.js',
   './manifest.webmanifest',
@@ -13,23 +14,9 @@ const CORE = [
   './icons/icon-192.png',
   './icons/icon-512.png'
 ];
-const FAST_NETWORK_BUDGET = 700;
-
-function preferFreshWithin(networkRequest, cachedResponse) {
-  const safeNetwork = networkRequest
-    .then((response) => response?.ok ? response : (cachedResponse || response))
-    .catch(() => cachedResponse || Response.error());
-  if (!cachedResponse) return safeNetwork;
-  return Promise.race([
-    safeNetwork,
-    new Promise((resolve) => setTimeout(() => resolve(cachedResponse),FAST_NETWORK_BUDGET))
-  ]);
-}
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE).then((cache) => Promise.all(CORE.map((path) => cache.add(path).catch(() => null))))
-  );
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(CORE)));
   self.skipWaiting();
 });
 
@@ -44,44 +31,34 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET' || new URL(event.request.url).origin !== self.location.origin) return;
 
   if (new URL(event.request.url).pathname.endsWith('/published-design.js')) {
-    const cacheKey = new URL(event.request.url);
-    cacheKey.search = '';
-    const networkUpdate = caches.open(CACHE).then((cache) =>
-      fetch(event.request,{ cache:'no-cache' }).then(async (response) => {
-        if (response.ok) await cache.put(cacheKey.toString(),response.clone());
-        return response;
+    event.respondWith(
+      caches.open(CACHE).then(async (cache) => {
+        const cacheKey = new URL(event.request.url);
+        cacheKey.search = '';
+        const cached = await cache.match(cacheKey.toString());
+        try {
+          const response = await fetch(event.request,{ cache:'no-cache' });
+          if (response.ok) cache.put(cacheKey.toString(),response.clone());
+          return response;
+        } catch {
+          return cached || Response.error();
+        }
       })
     );
-    event.waitUntil(networkUpdate.catch(() => null));
-    event.respondWith(
-      caches.match(cacheKey.toString()).then((cached) => preferFreshWithin(networkUpdate,cached))
-    );
     return;
   }
 
-  if (event.request.mode === 'navigate') {
-    const networkUpdate = fetch(event.request).then(async (response) => {
-      if (response.ok) {
-        const cache = await caches.open(CACHE);
-        await cache.put('./index.html',response.clone());
-      }
-      return response;
-    });
-    event.waitUntil(networkUpdate.catch(() => null));
-    event.respondWith(
-      caches.match('./index.html').then((cached) => preferFreshWithin(networkUpdate,cached))
-    );
-    return;
-  }
-
-  const networkUpdate = caches.open(CACHE).then((cache) =>
-    fetch(event.request).then(async (response) => {
-      if (response.ok) await cache.put(event.request,response.clone());
-      return response;
-    })
-  );
-  event.waitUntil(networkUpdate.catch(() => null));
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || networkUpdate).catch(() => networkUpdate)
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok) caches.open(CACHE).then((cache) => cache.put(event.request, response.clone()));
+        return response;
+      })
+      .catch(async () => {
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        if (event.request.mode === 'navigate') return caches.match('./index.html');
+        return Response.error();
+      })
   );
 });

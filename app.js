@@ -7,19 +7,6 @@
   const CLOUD_SYNC_KEY = 'galaxy_sprite_tracker_cloud_sync_v1';
   const OWNER_KEY_HASH = '1b5b7aba986560cfabe2c05862867822f83970debec9b8bd17afa1e52f779caa';
   const REORDER_MIME = 'application/x-sprite-variant-order';
-  const CODE_UPDATE_MANIFEST = 'sprite-code-update.json';
-  const CODE_UPDATE_TYPE = 'sprite-checklist-code-update';
-  const CODE_UPDATE_MAX_ARCHIVE_BYTES = 12 * 1024 * 1024;
-  const CODE_UPDATE_MAX_TOTAL_BYTES = 10 * 1024 * 1024;
-  const CODE_UPDATE_MAX_FILE_BYTES = 4 * 1024 * 1024;
-  const CODE_UPDATE_MAX_FILES = 50;
-  const CODE_UPDATE_ALLOWED_ROOT = new Set([
-    'index.html','styles.css','app.js','service-worker.js','data.js','manifest.webmanifest','README.txt','404.html','robots.txt','favicon.ico'
-  ]);
-  const CODE_UPDATE_ALLOWED_FOLDERS = new Set(['fonts','icons']);
-  const CODE_UPDATE_ALLOWED_EXTENSIONS = new Set([
-    'html','css','js','json','txt','webmanifest','woff','woff2','ttf','otf','png','jpg','jpeg','webp','svg','ico'
-  ]);
   const baseData = Array.isArray(window.SPRITE_DATA) ? window.SPRITE_DATA : [];
   const rarities = ['Rare','Epic','Legendary','Mythic'].filter((rarity) => baseData.some((family) => family.rarity === rarity));
   const defaultRarity = rarities[0] || 'Rare';
@@ -94,7 +81,6 @@
   let pendingFamilyBgImage;
   let pendingPageBgImage;
   let pendingPageHeaderBgImage;
-  let pendingPageHeaderHeight;
   let pendingHeaderBgImage;
   let publishedDesignFile;
   let publishedDesignContents = '';
@@ -102,11 +88,11 @@
   let previewObjectUrl;
   let studioDraft;
   let studioOriginal;
+  let studioPageRarity;
   let studioCommitted = false;
   let cloudSyncTimer;
   let cloudSyncInFlight = false;
   let cloudSyncQueued = false;
-  let pendingCodeUpdate = null;
   let lastPublicDesignCheck = 0;
   let summaryDrag = null;
 
@@ -131,9 +117,6 @@
   const cloudSyncBtn = document.getElementById('cloudSyncBtn');
   const cloudSyncStatus = document.getElementById('cloudSyncStatus');
   const cloudSyncDialogStatus = document.getElementById('cloudSyncDialogStatus');
-  const codeUpdateStatus = document.getElementById('codeUpdateStatus');
-  const codeUpdateConfirm = document.getElementById('codeUpdateConfirm');
-  const applyCodeUpdateBtn = document.getElementById('applyCodeUpdateBtn');
 
   try { ownerUnlocked = localStorage.getItem(OWNER_UNLOCK_KEY) === 'yes'; } catch {}
 
@@ -175,10 +158,7 @@
         ...DEFAULT_THEME,
         ...storedTheme,
         pageBackgrounds:Object.fromEntries(rarities.map((rarity) => [rarity,{ ...DEFAULT_THEME.pageBackgrounds[rarity], ...(storedTheme.pageBackgrounds?.[rarity] || {}) }])),
-        pageHeaderBackgrounds:Object.fromEntries(rarities.map((rarity) => {
-          const pageHeader = { ...DEFAULT_THEME.pageHeaderBackgrounds[rarity], ...(storedTheme.pageHeaderBackgrounds?.[rarity] || {}) };
-          return [rarity,{ ...pageHeader, enabled:Boolean(pageHeader.enabled && pageHeader.image) }];
-        }))
+        pageHeaderBackgrounds:Object.fromEntries(rarities.map((rarity) => [rarity,{ ...DEFAULT_THEME.pageHeaderBackgrounds[rarity], ...(storedTheme.pageHeaderBackgrounds?.[rarity] || {}) }]))
       }
     };
   }
@@ -186,17 +166,12 @@
   function loadDesign() {
     const saved = loadJson(DESIGN_KEY, null);
     const published = window.PUBLISHED_DESIGN && typeof window.PUBLISHED_DESIGN === 'object' ? window.PUBLISHED_DESIGN : null;
-    let selected;
-    if (!saved) selected = published || {};
-    else if (!published || !Object.keys(published).length) selected = saved;
-    else {
-      const localUpdatedAt = Number(saved._meta?.localUpdatedAt || 0);
-      const publishedAt = Number(published._meta?.publishedAt || 0);
-      selected = !saved._meta || publishedAt >= localUpdatedAt ? published : saved;
-    }
-    const normalized = normalizeDesign(selected);
-    try { localStorage.setItem(DESIGN_KEY,JSON.stringify(normalized)); } catch {}
-    return normalized;
+    if (!saved) return normalizeDesign(published || {});
+    if (!published || !Object.keys(published).length) return normalizeDesign(saved);
+    const localUpdatedAt = Number(saved._meta?.localUpdatedAt || 0);
+    const publishedAt = Number(published._meta?.publishedAt || 0);
+    if (!saved._meta || publishedAt > localUpdatedAt) return normalizeDesign(published);
+    return normalizeDesign(saved);
   }
 
   function hasOwn(object, key) {
@@ -221,7 +196,7 @@
     updateCloudSyncUi();
   }
 
-  function saveDesign({ silent = false } = {}) {
+  function saveDesign() {
     try {
       design._meta ||= {};
       design._meta.localUpdatedAt = Date.now();
@@ -229,7 +204,7 @@
       scheduleCloudSync();
       return true;
     } catch {
-      if (!silent) showSaveFailure('This design could not be saved because the browser is out of storage. Remove an unused image or try a smaller one.');
+      showSaveFailure('This design could not be saved because the browser is out of storage. Remove an unused image or try a smaller one.');
       return false;
     }
   }
@@ -363,13 +338,6 @@
     return `rgba(${red},${green},${blue},${Math.max(0,Math.min(100,Number(percentage))) / 100})`;
   }
 
-  function displayImageSource(source) {
-    const value = String(source || '');
-    const version = Number(design?._meta?.publishedAt || 0);
-    if (!value || !version || !/^(?:\.\/)?published-assets\//.test(value)) return value;
-    return `${value}${value.includes('?') ? '&' : '?'}v=${version}`;
-  }
-
   function summaryTextShadow(theme) {
     const strength = clamp(Number(theme.summaryEffectStrength) || 0,0,20);
     if (!strength || theme.summaryTextEffect === 'none') return 'none';
@@ -379,9 +347,8 @@
   }
 
   function applyCustomBackground(element, color, image, mode) {
-    const source = displayImageSource(image);
     element.style.backgroundColor = color;
-    element.style.backgroundImage = source ? `url("${source}")` : 'none';
+    element.style.backgroundImage = image ? `url("${image}")` : 'none';
     const sizing = imageMode(mode);
     element.style.backgroundSize = sizing.size;
     element.style.backgroundRepeat = sizing.repeat;
@@ -390,8 +357,7 @@
 
   function applyImageSurface(root, prefix, image, mode, useBuiltInWhenEmpty = false) {
     const property = `--theme-${prefix}-image`;
-    const source = displayImageSource(image);
-    if (source) root.style.setProperty(property, `url("${source}")`);
+    if (image) root.style.setProperty(property, `url("${image}")`);
     else if (useBuiltInWhenEmpty) root.style.removeProperty(property);
     else root.style.setProperty(property,'none');
     const sizing = imageMode(mode);
@@ -451,8 +417,7 @@
     root.style.setProperty('--theme-art-width',`${theme.artWidth}px`);
     applyImageSurface(root,'body',theme.bodyBgImage,theme.bodyBgMode,theme.useBuiltInBodyArt);
     const pageHeaderTheme = theme.pageHeaderBackgrounds?.[activeRarity] || DEFAULT_THEME.pageHeaderBackgrounds[activeRarity];
-    const usePageHeader = Boolean(pageHeaderTheme.enabled && pageHeaderTheme.image);
-    applyImageSurface(root,'header',usePageHeader ? pageHeaderTheme.image : theme.headerBgImage,usePageHeader ? pageHeaderTheme.mode : theme.headerBgMode);
+    applyImageSurface(root,'header',pageHeaderTheme.enabled ? pageHeaderTheme.image : theme.headerBgImage,pageHeaderTheme.enabled ? pageHeaderTheme.mode : theme.headerBgMode);
     applyImageSurface(root,'collection',theme.collectionBgImage,theme.collectionBgMode,theme.useBuiltInCollectionArt);
     applyImageSurface(root,'card',theme.cardBgImage,theme.cardBgMode);
     applyImageSurface(root,'well',theme.wellBgImage,theme.wellBgMode,theme.useBuiltInWellArt);
@@ -466,8 +431,8 @@
     hero.classList.toggle('summary-bars-hidden',!theme.summaryShowBars);
     const leftArt = document.getElementById('leftCustomArt');
     const rightArt = document.getElementById('rightCustomArt');
-    leftArt.src = displayImageSource(theme.leftArt);
-    rightArt.src = displayImageSource(theme.rightArt);
+    leftArt.src = theme.leftArt || '';
+    rightArt.src = theme.rightArt || '';
     leftArt.hidden = !theme.leftArt;
     rightArt.hidden = !theme.rightArt;
   }
@@ -616,7 +581,7 @@
     saveDesign();
   }
 
-  function makeCard(family, variant, { eager = false } = {}) {
+  function makeCard(family, variant) {
     const current = variantState(family.id, variant.id);
     const view = variantView(family, variant);
     const card = document.createElement('article');
@@ -626,16 +591,15 @@
     card.classList.toggle('is-hidden-editor', !view.visible);
     if (view.customCard) applyCustomBackground(card,view.cardColor,view.cardImage,view.cardMode);
     const displayName = view.name || (editMode ? '[No label]' : '');
-    const imageSource = displayImageSource(view.image);
-    const imageMarkup = imageSource
-      ? `<img src="${imageSource}" alt="${escapeHtml(displayName || family.name)} Sprite" ${eager ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"'} decoding="async" width="512" height="512">`
+    const imageMarkup = view.image
+      ? `<img src="${view.image}" alt="${escapeHtml(displayName || family.name)} Sprite" loading="lazy" decoding="async">`
       : '';
     card.classList.toggle('image-missing', !view.image);
 
     const order = currentVariantOrder(family);
     const orderIndex = order.indexOf(variant.id);
     card.innerHTML = `
-      <button class="edit-chip editor-only edit-variant-btn" type="button">Edit this sprite</button>
+      <button class="edit-chip editor-only edit-variant-btn" type="button">Edit sprite</button>
       <button class="crown-button" type="button" aria-pressed="false">${crownSvg()}</button>
       <div class="image-wrap">
         <button class="image-button" type="button" aria-pressed="false">
@@ -841,9 +805,8 @@
   }
 
   function renderCollections() {
-    document.getElementById('editPageBtn').textContent = `Edit ${activeRarity} page`;
+    applyTheme();
     collectionsEl.innerHTML = '';
-    let eagerImagesRemaining = 2;
     const page = design.pages[activeRarity] || DEFAULT_PAGES[activeRarity];
     renderText(pageEyebrowEl, page.eyebrow, '[No small heading]');
     renderText(pageTitleEl, page.title, '[No page title]');
@@ -862,7 +825,7 @@
       if (design.theme.collectionStyle === 'boxed' && familyInfo.customBg) applyCustomBackground(section,familyInfo.bgColor,familyInfo.bgImage,familyInfo.bgMode);
       const title = familyInfo.name || (editMode ? '[No group title]' : '');
       section.innerHTML = `
-        <div class="collection-tools editor-only"><button class="edit-chip edit-family-btn" type="button">Edit this group</button><button class="edit-chip add-variant-btn" type="button">Add box here</button></div>
+        <div class="collection-tools editor-only"><button class="edit-chip edit-family-btn" type="button">Edit group</button><button class="edit-chip add-variant-btn" type="button">Add box</button></div>
         <div class="collection-head">
           <h3${title ? '' : ' hidden'}>${escapeHtml(title)}</h3>
           <div class="collection-meta">
@@ -880,11 +843,7 @@
       const row = section.querySelector('.variant-row');
       orderedVariants(family).forEach((variant) => {
         const view = variantView(family,variant);
-        if (view.visible || editMode) {
-          const eager = Boolean(view.image && eagerImagesRemaining > 0);
-          if (eager) eagerImagesRemaining -= 1;
-          row.appendChild(makeCard(family,variant,{ eager }));
-        }
+        if (view.visible || editMode) row.appendChild(makeCard(family,variant));
       });
       collectionsEl.appendChild(section);
     });
@@ -930,7 +889,6 @@
     if (!rarities.includes(rarity)) return;
     const changed = activeRarity !== rarity;
     activeRarity = rarity;
-    applyTheme();
     renderTabs();
     renderCollections();
     updateCounters();
@@ -1121,8 +1079,7 @@
       const saveLabel = form?.querySelector('button[type="submit"]')?.textContent.trim() || 'Save changes';
       setEditorStatus(form,`${label} is ready. Tap ${saveLabel} to finish.`,'ready');
       return true;
-    } catch (error) {
-      console.error(`${label} preparation failed`,error);
+    } catch {
       setEditorStatus(form,`${label} could not be prepared. Try a PNG, JPG, or WebP image.`,'error');
       return false;
     } finally {
@@ -1154,16 +1111,18 @@
     themeBodyFont:'bodyFont', themeHeadingFont:'headingFont', themeButtonFont:'buttonFont',
     themeBaseSize:'baseSize', themeTitleSize:'titleSize', themePageTitleSize:'pageTitleSize', themeGroupTitleSize:'groupTitleSize', themeSpriteLabelSize:'spriteLabelSize', themeChecklistButtonSize:'checklistButtonSize', themeTextColor:'textColor', themeMutedColor:'mutedColor',
     themeBodyBgColor:'bodyBgColor', themeBodyBgMode:'bodyBgMode', themeUseBuiltInBodyArt:'useBuiltInBodyArt', themeShowStars:'showStars',
+    themeHeaderBgColor:'headerBgColor', themeHeaderTextColor:'headerTextColor', themeHeaderBorderColor:'headerBorderColor', themeHeaderRadius:'headerRadius', themeHeaderOpacity:'headerOpacity', themeHeaderHeight:'headerHeight', themeHeaderBgMode:'headerBgMode',
     themeCollectionStyle:'collectionStyle', themeCollectionBgColor:'collectionBgColor', themeCollectionTextColor:'collectionTextColor', themeCollectionBorderColor:'collectionBorderColor', themeCollectionRadius:'collectionRadius', themeCollectionBgMode:'collectionBgMode', themeUseBuiltInCollectionArt:'useBuiltInCollectionArt',
     themeCardBgColor:'cardBgColor', themeCardTextColor:'cardTextColor', themeCardBorderColor:'cardBorderColor', themeCardRadius:'cardRadius', themeCardBgMode:'cardBgMode',
     themeWellBgColor:'wellBgColor', themeWellBorderColor:'wellBorderColor', themeWellBgMode:'wellBgMode', themeUseBuiltInWellArt:'useBuiltInWellArt',
     themeTabBgColor:'tabBgColor', themeTabActiveColor:'tabActiveColor',
+    themeSummaryStyle:'summaryStyle', themeSummaryFont:'summaryFont', themeSummaryTextEffect:'summaryTextEffect', themeSummaryEffectColor:'summaryEffectColor', themeSummaryEffectStrength:'summaryEffectStrength', themeSummaryNumberSize:'summaryNumberSize', themeSummaryLabelSize:'summaryLabelSize', themeSummaryNumberColor:'summaryNumberColor', themeSummaryLabelColor:'summaryLabelColor', themeSummaryBgColor:'summaryBgColor', themeSummaryBorderColor:'summaryBorderColor', themeSummaryRadius:'summaryRadius', themeSummaryOpacity:'summaryOpacity', themeSummaryShowBars:'summaryShowBars',
     themeButtonBgColor:'buttonBgColor', themeButtonTextColor:'buttonTextColor', themeAccentColor:'accentColor',
     themeArtWidth:'artWidth'
   };
 
   const STUDIO_IMAGE_INPUTS = {
-    themeBodyBgFile:'bodyBgImage', themeCollectionBgFile:'collectionBgImage',
+    themeBodyBgFile:'bodyBgImage', themeHeaderBgFile:'headerBgImage', themeCollectionBgFile:'collectionBgImage',
     themeCardBgFile:'cardBgImage', themeWellBgFile:'wellBgImage', themeLeftArtFile:'leftArt', themeRightArtFile:'rightArt'
   };
 
@@ -1200,8 +1159,16 @@
       themeGroupTitleSizeOutput:`${document.getElementById('themeGroupTitleSize').value}px`,
       themeSpriteLabelSizeOutput:`${document.getElementById('themeSpriteLabelSize').value}px`,
       themeChecklistButtonSizeOutput:`${document.getElementById('themeChecklistButtonSize').value}px`,
+      themeHeaderRadiusOutput:`${document.getElementById('themeHeaderRadius').value}px`,
+      themeHeaderOpacityOutput:`${document.getElementById('themeHeaderOpacity').value}%`,
+      themeHeaderHeightOutput:Number(document.getElementById('themeHeaderHeight').value) ? `${document.getElementById('themeHeaderHeight').value}px` : 'Auto',
       themeCollectionRadiusOutput:`${document.getElementById('themeCollectionRadius').value}px`,
       themeCardRadiusOutput:`${document.getElementById('themeCardRadius').value}px`,
+      themeSummaryEffectStrengthOutput:`${document.getElementById('themeSummaryEffectStrength').value}px`,
+      themeSummaryNumberSizeOutput:`${document.getElementById('themeSummaryNumberSize').value}px`,
+      themeSummaryLabelSizeOutput:`${document.getElementById('themeSummaryLabelSize').value}px`,
+      themeSummaryRadiusOutput:`${document.getElementById('themeSummaryRadius').value}px`,
+      themeSummaryOpacityOutput:`${document.getElementById('themeSummaryOpacity').value}%`,
       themeArtWidthOutput:`${document.getElementById('themeArtWidth').value}px`
     };
     Object.entries(outputs).forEach(([id,value]) => { document.getElementById(id).textContent = value; });
@@ -1213,7 +1180,16 @@
       if (field.type === 'checkbox') field.checked = Boolean(studioDraft[key]);
       else field.value = studioDraft[key];
     });
+    const page = studioDraft.pageBackgrounds[studioPageRarity];
+    const pageHeader = studioDraft.pageHeaderBackgrounds[studioPageRarity];
+    document.getElementById('themePageBgEnabled').checked = page.enabled;
+    document.getElementById('themePageBgColor').value = page.color;
+    document.getElementById('themePageBgMode').value = page.mode;
+    document.getElementById('themePageHeaderEnabled').checked = pageHeader.enabled;
+    document.getElementById('themePageHeaderMode').value = pageHeader.mode;
     Object.keys(STUDIO_IMAGE_INPUTS).forEach((id) => { document.getElementById(id).value = ''; });
+    document.getElementById('themePageBgFile').value = '';
+    document.getElementById('themePageHeaderFile').value = '';
     document.getElementById('themeCustomFontFile').value = '';
     updateStudioOutputs();
   }
@@ -1225,6 +1201,7 @@
   }
 
   function openDesignStudio() {
+    studioPageRarity = activeRarity;
     studioOriginal = cloneJson(design.theme);
     studioDraft = cloneJson(design.theme);
     studioCommitted = false;
@@ -1246,162 +1223,10 @@
     const preview = document.getElementById('editHeaderImagePreview');
     const source = pendingHeaderBgImage === undefined ? design.theme.headerBgImage : pendingHeaderBgImage;
     const sizing = imageMode(document.getElementById('editHeaderBgMode').value);
-    const headerColor = document.getElementById('editHeaderBgColor').value;
-    const headerOpacity = Number(document.getElementById('editHeaderOpacity').value);
-    preview.style.backgroundColor = colorWithOpacity(headerColor,headerOpacity);
-    preview.style.backgroundImage = source ? `url("${displayImageSource(source)}")` : 'none';
+    preview.style.backgroundImage = source ? `url("${source}")` : 'none';
     preview.style.backgroundSize = sizing.size;
     preview.style.backgroundRepeat = sizing.repeat;
-    preview.style.borderColor = 'transparent';
-    preview.style.borderRadius = '0';
-    preview.style.minHeight = `${clamp(Number(document.getElementById('editHeaderHeight').value) * .55 || 150,130,235)}px`;
-    preview.style.color = document.getElementById('editHeaderTextColor').value;
-
-    const setPreviewText = (id,value) => {
-      const element = document.getElementById(id);
-      element.textContent = value || '';
-      element.hidden = !value;
-    };
-    setPreviewText('editHeaderPreviewKicker',document.getElementById('editKicker').value);
-    setPreviewText('editHeaderPreviewTitle',document.getElementById('editTitle').value);
-    setPreviewText('editHeaderPreviewSubtitle',document.getElementById('editSubtitle').value);
-    setPreviewText('editHeaderPreviewCollected',document.getElementById('editCollectedLabel').value);
-    setPreviewText('editHeaderPreviewMastered',document.getElementById('editMasteredLabel').value);
-
-    const summary = document.getElementById('editHeaderPreviewSummary');
-    summary.hidden = !document.getElementById('editShowSummary').checked;
-    const summaryTheme = {
-      summaryTextEffect:document.getElementById('editSummaryTextEffect').value,
-      summaryEffectColor:document.getElementById('editSummaryEffectColor').value,
-      summaryEffectStrength:Number(document.getElementById('editSummaryEffectStrength').value)
-    };
-    const textShadow = summaryTextShadow(summaryTheme);
-    const boxed = document.getElementById('editSummaryStyle').value === 'boxed';
-    const summaryFont = SUMMARY_FONT_OPTIONS[document.getElementById('editSummaryFont').value]?.css || SUMMARY_FONT_OPTIONS.body.css;
-    [...summary.children].forEach((box) => {
-      box.style.fontFamily = summaryFont;
-      box.style.color = document.getElementById('editSummaryNumberColor').value;
-      box.style.background = boxed ? colorWithOpacity(document.getElementById('editSummaryBgColor').value,document.getElementById('editSummaryOpacity').value) : 'transparent';
-      box.style.borderColor = boxed ? document.getElementById('editSummaryBorderColor').value : 'transparent';
-      box.style.borderRadius = `${document.getElementById('editSummaryRadius').value}px`;
-      box.querySelector('b').style.fontSize = `${clamp(Number(document.getElementById('editSummaryNumberSize').value) * .72,13,27)}px`;
-      box.querySelector('b').style.textShadow = textShadow;
-      box.querySelector('em').style.color = document.getElementById('editSummaryLabelColor').value;
-      box.querySelector('em').style.fontSize = `${clamp(Number(document.getElementById('editSummaryLabelSize').value) * .8,9,17)}px`;
-      box.querySelector('em').style.textShadow = textShadow;
-      box.querySelector('i').hidden = !document.getElementById('editSummaryShowBars').checked;
-    });
-  }
-
-  function updatePageHeaderImagePreview() {
-    const preview = document.getElementById('editPageHeaderPreview');
-    const pageHeader = design.theme.pageHeaderBackgrounds[activeRarity];
-    const enabled = document.getElementById('editPageHeaderEnabled').checked;
-    const raritySource = pendingPageHeaderBgImage === undefined ? pageHeader.image : pendingPageHeaderBgImage;
-    const useRaritySource = Boolean(enabled && raritySource);
-    const source = useRaritySource ? raritySource : design.theme.headerBgImage;
-    const mode = useRaritySource ? document.getElementById('editPageHeaderMode').value : design.theme.headerBgMode;
-    const sizing = imageMode(mode);
-    preview.style.backgroundImage = source ? `url("${displayImageSource(source)}")` : 'none';
-    preview.style.backgroundSize = sizing.size;
-    preview.style.backgroundRepeat = sizing.repeat;
-    const message = preview.querySelector('span');
-    message.textContent = enabled ? 'No rarity header image selected' : (design.theme.headerBgImage ? 'Using the main header image' : 'No main header image selected');
-    message.hidden = Boolean(source);
-  }
-
-  function updatePageEditorLivePreview() {
-    updatePageHeaderImagePreview();
-    document.getElementById('editPageDialogTitle').textContent = `Edit ${activeRarity} page`;
-    document.getElementById('editPageScopeTitle').textContent = `Scope: ${activeRarity} only`;
-    document.getElementById('editPageScopeDetails').innerHTML = `<b>Changes:</b> ${activeRarity} title, description, checklist background, and optional header image.`;
-    document.getElementById('editPageTextSectionTitle').textContent = `Page text — ${activeRarity} only`;
-    document.getElementById('editPageBackgroundSectionTitle').textContent = `Checklist background — ${activeRarity} only`;
-    document.getElementById('editPageHeaderSectionTitle').textContent = `Header image — ${activeRarity} only`;
-    document.getElementById('savePageEditorBtn').textContent = `Save ${activeRarity} page`;
-    document.getElementById('editPageHeaderPreview').setAttribute('aria-label',`${activeRarity} header image preview`);
-    const preview = document.getElementById('editPageBodyPreview');
-    const background = design.theme.pageBackgrounds[activeRarity];
-    const enabled = document.getElementById('editPageBgEnabled').checked;
-    document.getElementById('editPageBackgroundOptions').hidden = !enabled;
-    document.getElementById('editPageHeaderOptions').hidden = !document.getElementById('editPageHeaderEnabled').checked;
-    const source = pendingPageBgImage === undefined ? background.image : pendingPageBgImage;
-    const sizing = imageMode(document.getElementById('editPageBgMode').value);
-    preview.style.backgroundColor = enabled ? document.getElementById('editPageBgColor').value : 'rgba(13,14,49,.72)';
-    preview.style.backgroundImage = enabled && source ? `url("${displayImageSource(source)}")` : 'none';
-    preview.style.backgroundSize = sizing.size;
-    preview.style.backgroundRepeat = sizing.repeat;
-    const values = {
-      editPagePreviewEyebrow:document.getElementById('editPageEyebrow').value,
-      editPagePreviewTitle:document.getElementById('editPageTitle').value,
-      editPagePreviewDescription:document.getElementById('editPageDescription').value
-    };
-    Object.entries(values).forEach(([id,value]) => {
-      const element = document.getElementById(id);
-      element.textContent = value || '';
-      element.hidden = !value;
-    });
-  }
-
-  function updateFamilyEditorLivePreview() {
-    const family = allFamilies().find((item) => item.id === document.getElementById('editFamilyId').value);
-    if (!family) return;
-    const view = familyView(family);
-    const openLayout = design.theme.collectionStyle !== 'boxed';
-    document.getElementById('editFamilyOpenLayoutNote').hidden = !openLayout;
-    document.getElementById('editFamilyBackgroundControls').hidden = openLayout;
-    const title = document.getElementById('editFamilyName').value || '[No group title]';
-    document.getElementById('editFamilyDialogTitle').textContent = `Edit ${title}`;
-    document.getElementById('editFamilyScopeTitle').textContent = `Scope: ${title} only`;
-    document.getElementById('saveFamilyEditorBtn').textContent = `Save ${title}`;
-    document.getElementById('editFamilyPreviewTitle').textContent = title;
-    document.getElementById('editFamilyScopeText').textContent = `Changes: ${title} title, rarity, visibility, and optional background.`;
-    const preview = document.getElementById('editFamilyLivePreview');
-    preview.classList.toggle('is-open-layout',openLayout);
-    if (openLayout) {
-      preview.style.backgroundColor = 'transparent';
-      preview.style.backgroundImage = 'none';
-      preview.style.borderColor = 'transparent';
-      preview.style.color = design.theme.textColor;
-      return;
-    }
-    const custom = document.getElementById('editFamilyCustomBg').checked;
-    const image = custom ? (pendingFamilyBgImage === undefined ? view.bgImage : pendingFamilyBgImage) : design.theme.collectionBgImage;
-    const color = custom ? document.getElementById('editFamilyBgColor').value : design.theme.collectionBgColor;
-    const mode = custom ? document.getElementById('editFamilyBgMode').value : design.theme.collectionBgMode;
-    const sizing = imageMode(mode);
-    preview.style.backgroundColor = color;
-    preview.style.backgroundImage = image ? `url("${displayImageSource(image)}")` : 'none';
-    preview.style.backgroundSize = sizing.size;
-    preview.style.backgroundRepeat = sizing.repeat;
-    preview.style.borderColor = design.theme.collectionBorderColor;
-    preview.style.color = design.theme.collectionTextColor;
-  }
-
-  function updateVariantEditorLivePreview() {
-    const family = allFamilies().find((item) => item.id === document.getElementById('editVariantFamilyId').value);
-    const variant = family ? familyVariants(family).find((item) => item.id === document.getElementById('editVariantId').value) : null;
-    if (!family || !variant) return;
-    const view = variantView(family,variant);
-    const name = document.getElementById('editVariantName').value || '[No sprite label]';
-    const familyName = familyView(family).name || 'this group';
-    document.getElementById('editVariantDialogTitle').textContent = `Edit ${name}`;
-    document.getElementById('editVariantScopeTitle').textContent = `Scope: ${name} only`;
-    document.getElementById('saveVariantEditorBtn').textContent = `Save ${name}`;
-    document.getElementById('variantNameLivePreview').textContent = name;
-    document.getElementById('editVariantScopeText').textContent = `Changes: ${familyName} — ${name} label, artwork, visibility, and optional card background.`;
-    const preview = document.getElementById('variantCardLivePreview');
-    const custom = document.getElementById('editVariantCustomCard').checked;
-    const image = custom ? (pendingVariantCardImage === undefined ? view.cardImage : pendingVariantCardImage) : design.theme.cardBgImage;
-    const color = custom ? document.getElementById('editVariantCardColor').value : design.theme.cardBgColor;
-    const mode = custom ? document.getElementById('editVariantCardMode').value : design.theme.cardBgMode;
-    const sizing = imageMode(mode);
-    preview.style.backgroundColor = color;
-    preview.style.backgroundImage = image ? `url("${displayImageSource(image)}")` : 'none';
-    preview.style.backgroundSize = sizing.size;
-    preview.style.backgroundRepeat = sizing.repeat;
-    preview.style.borderColor = design.theme.cardBorderColor;
-    preview.style.color = design.theme.cardTextColor;
+    preview.querySelector('span').hidden = Boolean(source);
   }
 
   function updateHeaderSummaryOutputs() {
@@ -1441,8 +1266,11 @@
     document.getElementById('editHeaderBgMode').value = design.theme.headerBgMode;
     document.getElementById('editHeaderBgColor').value = design.theme.headerBgColor;
     document.getElementById('editHeaderTextColor').value = design.theme.headerTextColor;
+    document.getElementById('editHeaderBorderColor').value = design.theme.headerBorderColor;
+    document.getElementById('editHeaderRadius').value = design.theme.headerRadius;
     document.getElementById('editHeaderOpacity').value = design.theme.headerOpacity;
     document.getElementById('editHeaderHeight').value = design.theme.headerHeight;
+    document.getElementById('editHeaderRadiusOutput').textContent = `${design.theme.headerRadius}px`;
     document.getElementById('editHeaderOpacityOutput').textContent = `${design.theme.headerOpacity}%`;
     document.getElementById('editHeaderHeightOutput').textContent = design.theme.headerHeight ? `${design.theme.headerHeight}px` : 'Auto';
     updateHeaderSummaryOutputs();
@@ -1457,7 +1285,6 @@
     const pageHeader = design.theme.pageHeaderBackgrounds[activeRarity];
     pendingPageBgImage = undefined;
     pendingPageHeaderBgImage = undefined;
-    pendingPageHeaderHeight = undefined;
     document.getElementById('editPageEyebrow').value = page.eyebrow;
     document.getElementById('editPageTitle').value = page.title;
     document.getElementById('editPageDescription').value = page.description;
@@ -1468,7 +1295,6 @@
     document.getElementById('editPageHeaderEnabled').checked = pageHeader.enabled;
     document.getElementById('editPageHeaderMode').value = pageHeader.mode;
     document.getElementById('editPageHeaderFile').value = '';
-    updatePageEditorLivePreview();
     resetEditorStatus(document.getElementById('pageEditorForm'));
     document.getElementById('pageEditorDialog').showModal();
   }
@@ -1486,7 +1312,6 @@
     document.getElementById('editFamilyBgMode').value = view.bgMode;
     document.getElementById('editFamilyBgFile').value = '';
     document.getElementById('editFamilyVisible').checked = view.visible;
-    updateFamilyEditorLivePreview();
     resetEditorStatus(document.getElementById('familyEditorForm'));
     document.getElementById('familyEditorDialog').showModal();
   }
@@ -1509,14 +1334,13 @@
     document.getElementById('editVariantCardMode').value = view.cardMode;
     document.getElementById('editVariantCardFile').value = '';
     setVariantPreview(view.image);
-    updateVariantEditorLivePreview();
     resetEditorStatus(document.getElementById('variantEditorForm'));
     document.getElementById('variantEditorDialog').showModal();
   }
 
   function setVariantPreview(source) {
     const preview = document.getElementById('variantImagePreview');
-    preview.src = displayImageSource(source);
+    preview.src = source || '';
     preview.alt = source ? 'Sprite image preview' : 'No sprite image selected';
   }
 
@@ -1583,28 +1407,10 @@
     }
   }
 
-  async function saveDesignWithRarityHeaderFallback(file, pageHeader, form) {
-    if (saveDesign({ silent:true })) return { saved:true, compacted:false };
-    if (!file || !pageHeader?.image) {
-      showSaveFailure('This design could not be saved because the browser is out of storage. Remove an unused image or try a smaller one.');
-      return { saved:false, compacted:false };
-    }
-    setEditorProcessing(form,1,'Rarity header image');
-    try {
-      pageHeader.image = await resizeImage(file,artworkBounds('rarityHeaderFallback'));
-      if (saveDesign({ silent:true })) return { saved:true, compacted:true };
-    } catch {}
-    finally { setEditorProcessing(form,-1,'Rarity header image'); }
-    showSaveFailure('The rarity header is still too large for this browser’s saved design. Remove one unused background image, then try again.');
-    return { saved:false, compacted:false };
-  }
-
   function artworkBounds(area) {
     const sizes = {
       bodyBgImage:{ width:2560, height:2560, maxBytes:700000, quality:.94, minQuality:.8 },
       headerBgImage:{ width:2000, height:1000, maxBytes:560000, quality:.94, minQuality:.8 },
-      rarityHeader:{ width:2000, height:1000, maxBytes:500000, quality:.94, minQuality:.8 },
-      rarityHeaderFallback:{ width:1600, height:800, maxBytes:300000, quality:.9, minQuality:.78 },
       collectionBgImage:{ width:2000, height:1400, maxBytes:560000, quality:.94, minQuality:.8 },
       cardBgImage:{ width:1200, height:1500, maxBytes:340000, quality:.92, minQuality:.78 },
       wellBgImage:{ width:1200, height:1200, maxBytes:320000, quality:.92, minQuality:.78 },
@@ -1672,8 +1478,8 @@
     setTimeout(() => URL.revokeObjectURL(url),0);
   }
 
-  function buildPublishedDesignContents(publishedAt = Date.now() + 1, sourceDesign = design) {
-    const publicDesign = cloneJson(sourceDesign);
+  function buildPublishedDesignContents(publishedAt = Date.now() + 1) {
+    const publicDesign = cloneJson(design);
     publicDesign._meta ||= {};
     publicDesign._meta.publishedAt = publishedAt;
     delete publicDesign._meta.localUpdatedAt;
@@ -1742,458 +1548,36 @@
     }
   }
 
-  function formatCodeUpdateBytes(value) {
-    if (value < 1024) return `${value} B`;
-    if (value < 1048576) return `${Math.max(1,Math.round(value / 1024))} KB`;
-    return `${(value / 1048576).toFixed(1)} MB`;
-  }
-
-  function setCodeUpdateStatus(message, stateName = '') {
-    codeUpdateStatus.textContent = message;
-    codeUpdateStatus.classList.toggle('is-working',stateName === 'working');
-    codeUpdateStatus.classList.toggle('is-ready',stateName === 'ready');
-    codeUpdateStatus.classList.toggle('is-error',stateName === 'error');
-  }
-
-  function codeUpdateTargetText() {
-    const owner = cloudSyncSettings.owner?.trim() || 'SnorkyTheBeard';
-    const repo = cloudSyncSettings.repo?.trim() || 'Sprite-Checklist';
-    const branch = cloudSyncSettings.branch?.trim() || 'main';
-    return `${owner}/${repo} → ${branch}`;
-  }
-
-  function refreshCodeUpdateInstallButton() {
-    applyCodeUpdateBtn.disabled = !(
-      pendingCodeUpdate &&
-      codeUpdateConfirm.checked &&
-      ownerUnlocked &&
-      cloudSyncSettings.token
-    );
-  }
-
-  function resetCodeUpdateDialog() {
-    pendingCodeUpdate = null;
-    document.getElementById('codeUpdateFile').value = '';
-    document.getElementById('codeUpdatePreview').hidden = true;
-    document.getElementById('codeUpdateSummary').textContent = '';
-    document.getElementById('codeUpdateFileList').replaceChildren();
-    document.getElementById('codeUpdateTarget').textContent = codeUpdateTargetText();
-    codeUpdateConfirm.checked = false;
-    setCodeUpdateStatus(
-      cloudSyncSettings.token
-        ? 'Choose a code-update ZIP to preview it.'
-        : 'Connect Automatic sync first so this browser has permission to update GitHub.',
-      cloudSyncSettings.token ? '' : 'error'
-    );
-    refreshCodeUpdateInstallButton();
-  }
-
-  function openCodeUpdateDialog() {
-    if (!ownerUnlocked) return showToast('Unlock Owner access first');
-    resetCodeUpdateDialog();
-    document.getElementById('codeUpdateDialog').showModal();
-  }
-
-  function normalizeCodeUpdatePath(rawPath) {
-    if (typeof rawPath !== 'string' || !rawPath || rawPath.length > 180) throw new Error('The update contains an invalid file path.');
-    if (rawPath !== rawPath.trim() || rawPath.startsWith('/') || rawPath.startsWith('./') || rawPath.includes('\\') || rawPath.includes('//')) {
-      throw new Error(`Unsafe file path blocked: ${rawPath}`);
-    }
-    const parts = rawPath.split('/');
-    if (parts.some((part) => !part || part === '.' || part === '..' || part.startsWith('.'))) {
-      throw new Error(`Unsafe file path blocked: ${rawPath}`);
-    }
-    if (!/^[A-Za-z0-9._/-]+$/.test(rawPath)) throw new Error(`Unsupported file path blocked: ${rawPath}`);
-    return rawPath;
-  }
-
-  function validateCodeUpdateFilePath(rawPath) {
-    const path = normalizeCodeUpdatePath(rawPath);
-    const lowerPath = path.toLowerCase();
-    if (lowerPath === 'published-design.js' || lowerPath.startsWith('published-assets/')) {
-      throw new Error(`Protected public artwork cannot be changed by a code update: ${path}`);
-    }
-    if (CODE_UPDATE_ALLOWED_ROOT.has(path)) return path;
-    const parts = path.split('/');
-    const extension = parts[parts.length - 1].split('.').pop().toLowerCase();
-    if (parts.length >= 2 && CODE_UPDATE_ALLOWED_FOLDERS.has(parts[0]) && CODE_UPDATE_ALLOWED_EXTENSIONS.has(extension)) return path;
-    throw new Error(`This package is not allowed to update ${path}.`);
-  }
-
-  function findZipEndRecord(view) {
-    const earliest = Math.max(0,view.byteLength - 65557);
-    for (let offset = view.byteLength - 22; offset >= earliest; offset -= 1) {
-      if (view.getUint32(offset,true) === 0x06054b50) return offset;
-    }
-    throw new Error('This is not a supported code-update ZIP.');
-  }
-
-  function readStoredZipEntries(archiveBytes) {
-    const view = new DataView(archiveBytes.buffer,archiveBytes.byteOffset,archiveBytes.byteLength);
-    if (view.byteLength < 22) throw new Error('The selected ZIP is empty or incomplete.');
-    const endOffset = findZipEndRecord(view);
-    const diskNumber = view.getUint16(endOffset + 4,true);
-    const directoryDisk = view.getUint16(endOffset + 6,true);
-    const diskEntries = view.getUint16(endOffset + 8,true);
-    const entryCount = view.getUint16(endOffset + 10,true);
-    const directorySize = view.getUint32(endOffset + 12,true);
-    const directoryOffset = view.getUint32(endOffset + 16,true);
-    const commentLength = view.getUint16(endOffset + 20,true);
-    if (endOffset + 22 + commentLength !== view.byteLength) throw new Error('The ZIP has unexpected trailing data.');
-    if (diskNumber || directoryDisk || diskEntries !== entryCount) throw new Error('Multi-part ZIP files are not supported.');
-    if (!entryCount || entryCount > CODE_UPDATE_MAX_FILES + 12) throw new Error('The ZIP contains too many files.');
-    if (directoryOffset + directorySize > endOffset) throw new Error('The ZIP directory is incomplete.');
-
-    const decoder = new TextDecoder('utf-8',{ fatal:true });
-    const entries = new Map();
-    let directoryCursor = directoryOffset;
-    const directoryEnd = directoryOffset + directorySize;
-    for (let index = 0; index < entryCount; index += 1) {
-      if (directoryCursor + 46 > directoryEnd || view.getUint32(directoryCursor,true) !== 0x02014b50) {
-        throw new Error('The ZIP file list is damaged.');
-      }
-      const flags = view.getUint16(directoryCursor + 8,true);
-      const method = view.getUint16(directoryCursor + 10,true);
-      const compressedSize = view.getUint32(directoryCursor + 20,true);
-      const uncompressedSize = view.getUint32(directoryCursor + 24,true);
-      const nameLength = view.getUint16(directoryCursor + 28,true);
-      const extraLength = view.getUint16(directoryCursor + 30,true);
-      const entryCommentLength = view.getUint16(directoryCursor + 32,true);
-      const localOffset = view.getUint32(directoryCursor + 42,true);
-      const nextDirectoryCursor = directoryCursor + 46 + nameLength + extraLength + entryCommentLength;
-      if (nextDirectoryCursor > directoryEnd) throw new Error('A ZIP file entry is incomplete.');
-      if (flags & 1) throw new Error('Password-protected ZIP files are not supported.');
-      if (method !== 0 || compressedSize !== uncompressedSize) {
-        throw new Error('Use the original browser-installable code ZIP; recompressed ZIP files are not supported.');
-      }
-      if (uncompressedSize > CODE_UPDATE_MAX_FILE_BYTES) throw new Error('One of the update files is too large.');
-      const rawPath = decoder.decode(archiveBytes.subarray(directoryCursor + 46,directoryCursor + 46 + nameLength));
-      const isDirectory = rawPath.endsWith('/');
-      const normalizedPath = normalizeCodeUpdatePath(isDirectory ? rawPath.slice(0,-1) : rawPath);
-
-      if (localOffset + 30 > view.byteLength || view.getUint32(localOffset,true) !== 0x04034b50) {
-        throw new Error(`The ZIP entry for ${normalizedPath} is damaged.`);
-      }
-      const localFlags = view.getUint16(localOffset + 6,true);
-      const localMethod = view.getUint16(localOffset + 8,true);
-      const localNameLength = view.getUint16(localOffset + 26,true);
-      const localExtraLength = view.getUint16(localOffset + 28,true);
-      const dataOffset = localOffset + 30 + localNameLength + localExtraLength;
-      if ((localFlags & 1) || localMethod !== 0 || dataOffset + compressedSize > view.byteLength) {
-        throw new Error(`The ZIP entry for ${normalizedPath} is incomplete.`);
-      }
-      const localPath = decoder.decode(archiveBytes.subarray(localOffset + 30,localOffset + 30 + localNameLength));
-      if (localPath !== rawPath) throw new Error(`The ZIP has mismatched entries for ${normalizedPath}.`);
-
-      if (isDirectory) {
-        if (uncompressedSize || !CODE_UPDATE_ALLOWED_FOLDERS.has(normalizedPath.split('/')[0])) {
-          throw new Error(`Unexpected folder blocked: ${normalizedPath}`);
-        }
-      } else {
-        if (entries.has(normalizedPath)) throw new Error(`Duplicate file blocked: ${normalizedPath}`);
-        entries.set(normalizedPath,archiveBytes.slice(dataOffset,dataOffset + uncompressedSize));
-      }
-      directoryCursor = nextDirectoryCursor;
-    }
-    if (directoryCursor !== directoryEnd) throw new Error('The ZIP directory contains unsupported records.');
-    return entries;
-  }
-
-  async function sha256Hex(bytes) {
-    if (!globalThis.crypto?.subtle) throw new Error('This browser cannot securely verify code updates.');
-    const digest = await globalThis.crypto.subtle.digest('SHA-256',bytes);
-    return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2,'0')).join('');
-  }
-
-  async function validateCodeUpdateArchive(file) {
-    if (!file?.name?.toLowerCase().endsWith('.zip')) throw new Error('Choose a .zip code-update file.');
-    if (!file.size || file.size > CODE_UPDATE_MAX_ARCHIVE_BYTES) throw new Error('The update ZIP is empty or larger than 12 MB.');
-    const archiveBytes = new Uint8Array(await file.arrayBuffer());
-    const entries = readStoredZipEntries(archiveBytes);
-    const manifestBytes = entries.get(CODE_UPDATE_MANIFEST);
-    if (!manifestBytes) throw new Error(`The ZIP is missing ${CODE_UPDATE_MANIFEST}.`);
-    if (manifestBytes.byteLength > 100 * 1024) throw new Error('The update manifest is too large.');
-
-    let manifest;
-    try { manifest = JSON.parse(new TextDecoder().decode(manifestBytes)); }
-    catch { throw new Error('The update manifest is not valid JSON.'); }
-    if (manifest?.type !== CODE_UPDATE_TYPE || manifest?.version !== 1 || !Array.isArray(manifest.files)) {
-      throw new Error('This ZIP was not prepared for the Sprite Checklist code installer.');
-    }
-    if (!manifest.files.length || manifest.files.length > CODE_UPDATE_MAX_FILES) throw new Error('The manifest has an invalid number of files.');
-
-    const listedPaths = new Set();
-    const files = [];
-    let totalBytes = 0;
-    for (const listedFile of manifest.files) {
-      const path = validateCodeUpdateFilePath(listedFile?.path);
-      if (listedPaths.has(path)) throw new Error(`The manifest lists ${path} more than once.`);
-      if (!Number.isSafeInteger(listedFile.size) || listedFile.size < 0 || !/^[0-9a-f]{64}$/i.test(listedFile.sha256 || '')) {
-        throw new Error(`The manifest details for ${path} are invalid.`);
-      }
-      const bytes = entries.get(path);
-      if (!bytes) throw new Error(`The ZIP is missing the listed file ${path}.`);
-      if (bytes.byteLength !== listedFile.size) throw new Error(`${path} does not match its verified size.`);
-      const actualHash = await sha256Hex(bytes);
-      if (actualHash !== listedFile.sha256.toLowerCase()) throw new Error(`${path} failed its security check.`);
-      listedPaths.add(path);
-      totalBytes += bytes.byteLength;
-      if (totalBytes > CODE_UPDATE_MAX_TOTAL_BYTES) throw new Error('The verified update files are larger than 10 MB.');
-      files.push({ path, bytes, sha256:actualHash });
-    }
-
-    for (const path of entries.keys()) {
-      if (path !== CODE_UPDATE_MANIFEST && !listedPaths.has(path)) throw new Error(`Unlisted file blocked: ${path}`);
-    }
-    if (entries.size !== files.length + 1) throw new Error('The ZIP contains files that are not in its manifest.');
-    return { fileName:file.name, manifest, files, totalBytes };
-  }
-
-  function renderCodeUpdatePreview(update) {
-    document.getElementById('codeUpdateSummary').textContent = `${update.files.length} verified file${update.files.length === 1 ? '' : 's'} • ${formatCodeUpdateBytes(update.totalBytes)}`;
-    const list = document.getElementById('codeUpdateFileList');
-    list.replaceChildren();
-    update.files.forEach((file) => {
-      const item = document.createElement('li');
-      const path = document.createElement('span');
-      const size = document.createElement('small');
-      path.textContent = file.path;
-      size.textContent = formatCodeUpdateBytes(file.bytes.byteLength);
-      item.append(path,size);
-      list.appendChild(item);
-    });
-    document.getElementById('codeUpdatePreview').hidden = false;
-  }
-
-  function bytesToBase64(bytes) {
-    let binary = '';
-    for (let index = 0; index < bytes.length; index += 32768) binary += String.fromCharCode(...bytes.subarray(index,index + 32768));
-    return btoa(binary);
-  }
-
-  async function githubJsonRequest(settings, apiPath, options = {}) {
+  async function publishDesignToGitHub(settings) {
     const owner = encodeURIComponent(settings.owner.trim());
     const repo = encodeURIComponent(settings.repo.trim());
-    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}${apiPath}`,{
-      ...options,
-      cache:'no-store',
-      headers:{
-        Accept:'application/vnd.github+json',
-        Authorization:`Bearer ${settings.token}`,
-        'X-GitHub-Api-Version':'2022-11-28',
-        ...(options.body ? { 'Content-Type':'application/json' } : {}),
-        ...(options.headers || {})
-      }
-    });
-    if (!response.ok) {
-      const error = new Error(await githubErrorMessage(response));
-      error.status = response.status;
-      throw error;
-    }
-    return response.status === 204 ? {} : response.json();
-  }
-
-  async function installCodeUpdateOnGitHub(update, settings) {
-    if (!settings.owner?.trim() || !settings.repo?.trim() || !settings.branch?.trim() || !settings.token) {
-      throw new Error('The saved GitHub connection is incomplete. Open Automatic sync and reconnect it.');
-    }
-    const blobEntries = [];
-    for (let index = 0; index < update.files.length; index += 1) {
-      const file = update.files[index];
-      setCodeUpdateStatus(`Uploading verified file ${index + 1} of ${update.files.length}: ${file.path}`,'working');
-      const blob = await githubJsonRequest(settings,'/git/blobs',{
-        method:'POST',
-        body:JSON.stringify({ content:bytesToBase64(file.bytes), encoding:'base64' })
-      });
-      blobEntries.push({ path:file.path, mode:'100644', type:'blob', sha:blob.sha });
-    }
-
-    const branchPath = settings.branch.trim().split('/').map(encodeURIComponent).join('/');
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      setCodeUpdateStatus(attempt ? 'The branch changed during the update. Safely rebuilding the commit…' : 'Creating one atomic GitHub commit…','working');
-      const reference = await githubJsonRequest(settings,`/git/ref/heads/${branchPath}`);
-      const parentSha = reference?.object?.sha;
-      if (!parentSha) throw new Error('GitHub did not return the current branch version.');
-      const parentCommit = await githubJsonRequest(settings,`/git/commits/${encodeURIComponent(parentSha)}`);
-      const tree = await githubJsonRequest(settings,'/git/trees',{
-        method:'POST',
-        body:JSON.stringify({ base_tree:parentCommit.tree.sha, tree:blobEntries })
-      });
-      const commit = await githubJsonRequest(settings,'/git/commits',{
-        method:'POST',
-        body:JSON.stringify({
-          message:`Install Sprite Checklist code update ${new Date().toISOString()}`,
-          tree:tree.sha,
-          parents:[parentSha]
-        })
-      });
-      try {
-        await githubJsonRequest(settings,`/git/refs/heads/${branchPath}`,{
-          method:'PATCH',
-          body:JSON.stringify({ sha:commit.sha, force:false })
-        });
-        return commit;
-      } catch (error) {
-        if (attempt === 0 && (error.status === 409 || error.status === 422)) continue;
-        throw error;
-      }
-    }
-    throw new Error('The branch kept changing. Wait a moment and try again.');
-  }
-
-  function setCodeUpdateBusy(isBusy) {
-    const form = document.getElementById('codeUpdateForm');
-    form.toggleAttribute('aria-busy',isBusy);
-    form.querySelectorAll('input,button').forEach((control) => {
-      if (isBusy) {
-        control.dataset.codeUpdateWasDisabled = control.disabled ? 'yes' : 'no';
-        control.disabled = true;
-      } else {
-        control.disabled = control.dataset.codeUpdateWasDisabled === 'yes';
-        delete control.dataset.codeUpdateWasDisabled;
-      }
-    });
-    if (!isBusy) refreshCodeUpdateInstallButton();
-  }
-
-  function repositoryDesignPath(value) {
-    const path = String(value || '').trim().replace(/^\.\//,'');
-    const parts = path.split('/');
-    if (!path || path.startsWith('/') || parts.some((part) => !part || part === '.' || part === '..' || part.startsWith('.'))) {
-      throw new Error('The saved design-file path is not safe. Use published-design.js.');
-    }
-    return path;
-  }
-
-  function publishedAssetExtension(mimeType) {
-    const extensions = {
-      'image/png':'png', 'image/jpeg':'jpg', 'image/webp':'webp', 'image/gif':'gif', 'image/avif':'avif', 'image/svg+xml':'svg',
-      'font/woff':'woff', 'font/woff2':'woff2', 'font/ttf':'ttf', 'font/otf':'otf',
-      'application/font-woff':'woff', 'application/x-font-ttf':'ttf', 'application/x-font-opentype':'otf'
-    };
-    return extensions[mimeType.toLowerCase()] || '';
-  }
-
-  function publishableDataUrlInfo(value) {
-    const text = String(value || '');
-    const marker = ';base64,';
-    const markerIndex = text.indexOf(marker);
-    if (!text.startsWith('data:') || markerIndex < 6) return null;
-    const mimeType = text.slice(5,markerIndex).toLowerCase();
-    const extension = publishedAssetExtension(mimeType);
-    if (!extension) return null;
-    return { text, payloadIndex:markerIndex + marker.length, mimeType, extension, kind:mimeType.startsWith('image/') ? 'art' : 'font' };
-  }
-
-  function decodePublishableDataUrl(value) {
-    const info = publishableDataUrlInfo(value);
-    if (!info) return null;
-    let binary;
-    try { binary = atob(info.text.slice(info.payloadIndex).replace(/\s/g,'')); }
-    catch { throw new Error('One saved artwork file is damaged and cannot be published.'); }
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-    return { bytes, extension:info.extension, kind:info.kind };
-  }
-
-  function visitDesignStrings(value, visitor) {
-    if (Array.isArray(value)) {
-      value.forEach((item,index) => {
-        if (typeof item === 'string') value[index] = visitor(item);
-        else if (item && typeof item === 'object') visitDesignStrings(item,visitor);
-      });
-      return value;
-    }
-    if (!value || typeof value !== 'object') return value;
-    Object.keys(value).forEach((key) => {
-      const item = value[key];
-      if (typeof item === 'string') value[key] = visitor(item);
-      else if (item && typeof item === 'object') visitDesignStrings(item,visitor);
-    });
-    return value;
-  }
-
-  async function prepareDesignForGitHub(sourceDesign) {
-    const publicDesign = cloneJson(sourceDesign);
-    const dataUrls = new Set();
-    visitDesignStrings(publicDesign,(value) => {
-      if (publishableDataUrlInfo(value)) dataUrls.add(value);
-      return value;
-    });
-    const replacements = new Map();
-    const assetsByPath = new Map();
-    for (const dataUrl of dataUrls) {
-      const decoded = decodePublishableDataUrl(dataUrl);
-      const digest = await sha256Hex(decoded.bytes);
-      const path = `published-assets/custom-${decoded.kind}-${digest.slice(0,20)}.${decoded.extension}`;
-      replacements.set(dataUrl,path);
-      if (!assetsByPath.has(path)) assetsByPath.set(path,{ path, bytes:decoded.bytes });
-    }
-    visitDesignStrings(publicDesign,(value) => replacements.get(value) || value);
-    return { publicDesign, replacements, assets:[...assetsByPath.values()] };
-  }
-
-  function compactCurrentDesignAfterPublication(publication) {
-    if (publication.replacements?.size) visitDesignStrings(design,(value) => publication.replacements.get(value) || value);
-    design._meta ||= {};
-    design._meta.publishedAt = publication.publishedAt;
-    try { localStorage.setItem(DESIGN_KEY,JSON.stringify(design)); }
-    catch { showSaveFailure('The design published, but Safari could not refresh its local copy. Reload the page once to clear the older oversized copy.'); }
-  }
-
-  async function publishDesignToGitHub(settings) {
-    if (!settings.owner?.trim() || !settings.repo?.trim() || !settings.branch?.trim() || !settings.token) {
-      throw new Error('The saved GitHub connection is incomplete.');
-    }
     const branch = settings.branch.trim();
-    const designPath = repositoryDesignPath(settings.path);
-    const prepared = await prepareDesignForGitHub(design);
-    const publishedAt = Date.now() + 1;
-    const contents = buildPublishedDesignContents(publishedAt,prepared.publicDesign);
-    const blobEntries = [];
-    for (const asset of prepared.assets) {
-      const blob = await githubJsonRequest(settings,'/git/blobs',{
-        method:'POST',
-        body:JSON.stringify({ content:bytesToBase64(asset.bytes), encoding:'base64' })
-      });
-      blobEntries.push({ path:asset.path, mode:'100644', type:'blob', sha:blob.sha });
-    }
-    const designBlob = await githubJsonRequest(settings,'/git/blobs',{
-      method:'POST',
-      body:JSON.stringify({ content:utf8ToBase64(contents), encoding:'base64' })
-    });
-    blobEntries.push({ path:designPath, mode:'100644', type:'blob', sha:designBlob.sha });
+    const path = settings.path.trim().split('/').filter(Boolean).map(encodeURIComponent).join('/');
+    const endpoint = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+    const headers = {
+      Accept:'application/vnd.github.object+json',
+      Authorization:`Bearer ${settings.token}`,
+      'X-GitHub-Api-Version':'2022-11-28'
+    };
+    const currentResponse = await fetch(`${endpoint}?ref=${encodeURIComponent(branch)}`,{ headers, cache:'no-store' });
+    let sha = '';
+    if (currentResponse.ok) sha = (await currentResponse.json()).sha || '';
+    else if (currentResponse.status !== 404) throw new Error(await githubErrorMessage(currentResponse));
 
-    const branchPath = branch.split('/').map(encodeURIComponent).join('/');
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const reference = await githubJsonRequest(settings,`/git/ref/heads/${branchPath}`);
-      const parentSha = reference?.object?.sha;
-      if (!parentSha) throw new Error('GitHub did not return the current branch version.');
-      const parentCommit = await githubJsonRequest(settings,`/git/commits/${encodeURIComponent(parentSha)}`);
-      const tree = await githubJsonRequest(settings,'/git/trees',{
-        method:'POST',
-        body:JSON.stringify({ base_tree:parentCommit.tree.sha, tree:blobEntries })
-      });
-      const commit = await githubJsonRequest(settings,'/git/commits',{
-        method:'POST',
-        body:JSON.stringify({
-          message:`Publish Sprite Checklist design ${new Date(publishedAt).toISOString()}`,
-          tree:tree.sha,
-          parents:[parentSha]
-        })
-      });
-      try {
-        await githubJsonRequest(settings,`/git/refs/heads/${branchPath}`,{
-          method:'PATCH',
-          body:JSON.stringify({ sha:commit.sha, force:false })
-        });
-        return { publishedAt, result:commit, replacements:prepared.replacements, assetCount:prepared.assets.length };
-      } catch (error) {
-        if (attempt === 0 && (error.status === 409 || error.status === 422)) continue;
-        throw error;
-      }
-    }
-    throw new Error('The branch kept changing. Wait a moment and try again.');
+    const publishedAt = Date.now() + 1;
+    const body = {
+      message:`Publish Sprite Checklist design ${new Date(publishedAt).toISOString()}`,
+      content:utf8ToBase64(buildPublishedDesignContents(publishedAt)),
+      branch
+    };
+    if (sha) body.sha = sha;
+    const updateResponse = await fetch(endpoint,{
+      method:'PUT',
+      headers:{ ...headers, 'Content-Type':'application/json' },
+      body:JSON.stringify(body)
+    });
+    if (!updateResponse.ok) throw new Error(await githubErrorMessage(updateResponse));
+    return { publishedAt, result:await updateResponse.json() };
   }
 
   function scheduleCloudSync() {
@@ -2214,11 +1598,9 @@
     updateCloudSyncUi('Publishing design for every browser…');
     try {
       const publication = await publishDesignToGitHub({ ...cloudSyncSettings });
-      compactCurrentDesignAfterPublication(publication);
       cloudSyncSettings.lastPublishedAt = publication.publishedAt;
       persistCloudSyncSettings();
-      const assetNote = publication.assetCount ? ` ${publication.assetCount} new artwork file${publication.assetCount === 1 ? '' : 's'} stored outside browser data.` : '';
-      updateCloudSyncUi(`Published successfully.${assetNote} Other browsers will update after GitHub Pages deploys.`,'synced');
+      updateCloudSyncUi('Published successfully. Other browsers will update after GitHub Pages deploys.','synced');
       showToast('Public design synced');
     } catch (error) {
       updateCloudSyncUi(`Automatic publish failed: ${error.message}`,'error');
@@ -2337,68 +1719,6 @@
     if (designSaved) showToast('All changes saved');
   });
   cloudSyncBtn.addEventListener('click',openCloudSyncDialog);
-  document.getElementById('installCodeUpdateBtn').addEventListener('click',openCodeUpdateDialog);
-  codeUpdateConfirm.addEventListener('change',refreshCodeUpdateInstallButton);
-  document.getElementById('codeUpdateFile').addEventListener('change', async (event) => {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    if (!file) return;
-    pendingCodeUpdate = null;
-    codeUpdateConfirm.checked = false;
-    document.getElementById('codeUpdatePreview').hidden = true;
-    document.getElementById('codeUpdateFileList').replaceChildren();
-    refreshCodeUpdateInstallButton();
-    input.disabled = true;
-    setCodeUpdateStatus(`Checking ${file.name} before anything is sent to GitHub…`,'working');
-    try {
-      const update = await validateCodeUpdateArchive(file);
-      pendingCodeUpdate = update;
-      renderCodeUpdatePreview(update);
-      setCodeUpdateStatus(
-        cloudSyncSettings.token
-          ? 'Package verified. Review every file above, then check the confirmation box.'
-          : 'Package verified, but Automatic sync must be connected before it can be installed.',
-        cloudSyncSettings.token ? 'ready' : 'error'
-      );
-    } catch (error) {
-      console.error('Code update verification failed',error);
-      input.value = '';
-      setCodeUpdateStatus(`Update blocked: ${error.message}`,'error');
-    } finally {
-      input.disabled = false;
-      refreshCodeUpdateInstallButton();
-    }
-  });
-  document.getElementById('codeUpdateForm').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    if (!ownerUnlocked) return setCodeUpdateStatus('Owner access is locked. Unlock it before installing an update.','error');
-    if (!pendingCodeUpdate) return setCodeUpdateStatus('Choose and verify a code-update ZIP first.','error');
-    if (!cloudSyncSettings.token) return setCodeUpdateStatus('Connect Automatic sync first so GitHub can authorize this update.','error');
-    if (!codeUpdateConfirm.checked) return setCodeUpdateStatus('Review the file list and check the confirmation box first.','error');
-
-    clearTimeout(cloudSyncTimer);
-    cloudSyncQueued = false;
-    setCodeUpdateBusy(true);
-    try {
-      await installCodeUpdateOnGitHub(pendingCodeUpdate,{ ...cloudSyncSettings });
-      setCodeUpdateStatus('Code update installed. GitHub Pages is deploying it now.','ready');
-      setCodeUpdateBusy(false);
-      document.getElementById('codeUpdateDialog').close();
-      requestAnimationFrame(() => showToast('Code update installed — GitHub Pages is deploying'));
-    } catch (error) {
-      console.error('Code update install failed',error);
-      const permissionHint = error.status === 401 || error.status === 403
-        ? ' Reconnect Automatic sync with a repository token that has Contents: Read and write.'
-        : '';
-      const ending = /[.!?]$/.test(error.message) ? '' : '.';
-      setCodeUpdateStatus(`GitHub update failed: ${error.message}${ending}${permissionHint}`,'error');
-      setCodeUpdateBusy(false);
-    }
-  });
-  document.getElementById('codeUpdateDialog').addEventListener('cancel', (event) => {
-    if (document.getElementById('codeUpdateForm').hasAttribute('aria-busy')) event.preventDefault();
-  });
-  document.getElementById('codeUpdateDialog').addEventListener('close',resetCodeUpdateDialog);
   document.getElementById('cloudSyncForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     const tokenInput = document.getElementById('syncGithubToken');
@@ -2419,11 +1739,9 @@
     cloudSyncDialogStatus.textContent = 'Checking the connection and publishing the current design…';
     try {
       const publication = await publishDesignToGitHub(candidate);
-      compactCurrentDesignAfterPublication(publication);
       cloudSyncSettings = { ...candidate, lastPublishedAt:publication.publishedAt };
       persistCloudSyncSettings();
-      const assetNote = publication.assetCount ? ` ${publication.assetCount} embedded file${publication.assetCount === 1 ? ' was' : 's were'} moved into published-assets.` : '';
-      updateCloudSyncUi(candidate.enabled ? `Connected.${assetNote} Future saved changes will publish automatically.` : `Connected; automatic publishing is paused.${assetNote}`,'synced');
+      updateCloudSyncUi(candidate.enabled ? 'Connected. Future saved changes will publish automatically.' : 'Connected; automatic publishing is paused.','synced');
       document.getElementById('cloudSyncDialog').close();
       showToast('Automatic browser sync connected');
     } catch (error) {
@@ -2457,6 +1775,27 @@
     });
   });
 
+  ['themePageBgEnabled','themePageBgColor','themePageBgMode'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', (event) => {
+      if (!studioDraft) return;
+      const page = studioDraft.pageBackgrounds[studioPageRarity];
+      if (id === 'themePageBgEnabled') page.enabled = event.currentTarget.checked;
+      if (id === 'themePageBgColor') page.color = event.currentTarget.value;
+      if (id === 'themePageBgMode') page.mode = event.currentTarget.value;
+      previewStudioDraft();
+    });
+  });
+
+  ['themePageHeaderEnabled','themePageHeaderMode'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', (event) => {
+      if (!studioDraft) return;
+      const pageHeader = studioDraft.pageHeaderBackgrounds[studioPageRarity];
+      if (id === 'themePageHeaderEnabled') pageHeader.enabled = event.currentTarget.checked;
+      if (id === 'themePageHeaderMode') pageHeader.mode = event.currentTarget.value;
+      previewStudioDraft();
+    });
+  });
+
   Object.entries(STUDIO_IMAGE_INPUTS).forEach(([id,key]) => {
     document.getElementById(id).addEventListener('change', async (event) => {
       const input = event.currentTarget;
@@ -2465,8 +1804,40 @@
         const image = await resizeImage(file,artworkBounds(key));
         if (!studioDraft) throw new Error('editor-closed');
         studioDraft[key] = image;
+        if (key === 'headerBgImage' && !studioDraft.headerHeight) {
+          studioDraft.headerHeight = 220;
+          document.getElementById('themeHeaderHeight').value = '220';
+        }
         previewStudioDraft();
       });
+    });
+  });
+
+  document.getElementById('themePageBgFile').addEventListener('change', async (event) => {
+    const input = event.currentTarget;
+    if (!studioDraft) return;
+    await processEditorImage(input,'Page background',async (file) => {
+      const image = await resizeImage(file,artworkBounds('page'));
+      if (!studioDraft) throw new Error('editor-closed');
+      const page = studioDraft.pageBackgrounds[studioPageRarity];
+      page.image = image;
+      page.enabled = true;
+      document.getElementById('themePageBgEnabled').checked = true;
+      previewStudioDraft();
+    });
+  });
+
+  document.getElementById('themePageHeaderFile').addEventListener('change', async (event) => {
+    const input = event.currentTarget;
+    if (!studioDraft) return;
+    await processEditorImage(input,'Rarity header image',async (file) => {
+      const image = await resizeImage(file,artworkBounds('headerBgImage'));
+      if (!studioDraft) throw new Error('editor-closed');
+      const pageHeader = studioDraft.pageHeaderBackgrounds[studioPageRarity];
+      pageHeader.image = image;
+      pageHeader.enabled = true;
+      document.getElementById('themePageHeaderEnabled').checked = true;
+      previewStudioDraft();
     });
   });
 
@@ -2475,8 +1846,26 @@
       if (!studioDraft) return;
       studioDraft[button.dataset.removeThemeImage] = '';
       previewStudioDraft();
-      setEditorStatus(button.closest('form'),'Artwork will be removed. Tap Save whole-site defaults to finish.','ready');
+      setEditorStatus(button.closest('form'),'Artwork will be removed. Tap Apply design to save.','ready');
     });
+  });
+
+  document.getElementById('removePageBgBtn').addEventListener('click', () => {
+    if (!studioDraft) return;
+    studioDraft.pageBackgrounds[studioPageRarity].image = '';
+    previewStudioDraft();
+    setEditorStatus(document.getElementById('designStudioForm'),'Page artwork will be removed. Tap Apply design to save.','ready');
+  });
+
+  document.getElementById('removePageHeaderBtn').addEventListener('click', () => {
+    if (!studioDraft) return;
+    const pageHeader = studioDraft.pageHeaderBackgrounds[studioPageRarity];
+    pageHeader.image = '';
+    pageHeader.enabled = false;
+    document.getElementById('themePageHeaderEnabled').checked = false;
+    document.getElementById('themePageHeaderFile').value = '';
+    previewStudioDraft();
+    setEditorStatus(document.getElementById('designStudioForm'),'This rarity will use the main header image. Tap Apply design to save.','ready');
   });
 
   document.getElementById('themeCustomFontFile').addEventListener('change', async (event) => {
@@ -2516,7 +1905,7 @@
     design.theme = studioDraft;
     if (!saveDesign()) return;
     studioCommitted = true;
-    finishEditorSave('designStudioDialog','Whole-site defaults saved');
+    finishEditorSave('designStudioDialog','Design changes saved');
   });
 
   document.getElementById('designStudioDialog').addEventListener('close', () => {
@@ -2545,6 +1934,10 @@
     updateHeaderImagePreview();
     setEditorStatus(document.getElementById('headerEditorForm'),'Header image will be removed. Tap Save header to finish.','ready');
   });
+  document.getElementById('editHeaderBgMode').addEventListener('input',updateHeaderImagePreview);
+  document.getElementById('editHeaderRadius').addEventListener('input', (event) => {
+    document.getElementById('editHeaderRadiusOutput').textContent = `${event.currentTarget.value}px`;
+  });
   document.getElementById('editHeaderOpacity').addEventListener('input', (event) => {
     document.getElementById('editHeaderOpacityOutput').textContent = `${event.currentTarget.value}%`;
   });
@@ -2554,13 +1947,6 @@
   ['editSummaryEffectStrength','editSummaryNumberSize','editSummaryLabelSize','editSummaryRadius','editSummaryOpacity'].forEach((id) => {
     document.getElementById(id).addEventListener('input',updateHeaderSummaryOutputs);
   });
-  [
-    'editKicker','editTitle','editSubtitle','editCollectedLabel','editMasteredLabel','editShowSummary',
-    'editSummaryStyle','editSummaryFont','editSummaryTextEffect','editSummaryEffectColor','editSummaryEffectStrength',
-    'editSummaryNumberSize','editSummaryLabelSize','editSummaryNumberColor','editSummaryLabelColor','editSummaryBgColor',
-    'editSummaryBorderColor','editSummaryRadius','editSummaryOpacity','editSummaryShowBars','editHeaderBgMode',
-    'editHeaderBgColor','editHeaderTextColor','editHeaderOpacity','editHeaderHeight'
-  ].forEach((id) => document.getElementById(id).addEventListener('input',updateHeaderImagePreview));
 
   document.getElementById('headerEditorForm').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -2584,6 +1970,8 @@
     design.theme.headerBgMode = document.getElementById('editHeaderBgMode').value;
     design.theme.headerBgColor = document.getElementById('editHeaderBgColor').value;
     design.theme.headerTextColor = document.getElementById('editHeaderTextColor').value;
+    design.theme.headerBorderColor = document.getElementById('editHeaderBorderColor').value;
+    design.theme.headerRadius = Number(document.getElementById('editHeaderRadius').value);
     design.theme.headerOpacity = Number(document.getElementById('editHeaderOpacity').value);
     design.theme.headerHeight = Number(document.getElementById('editHeaderHeight').value);
     design.theme.summaryStyle = document.getElementById('editSummaryStyle').value;
@@ -2610,35 +1998,27 @@
     await processEditorImage(input,'Page background',async (file) => {
       pendingPageBgImage = await resizeImage(file,artworkBounds('page'));
       document.getElementById('editPageBgEnabled').checked = true;
-      updatePageEditorLivePreview();
     });
   });
   document.getElementById('removeEditPageBgBtn').addEventListener('click', () => {
     pendingPageBgImage = '';
-    updatePageEditorLivePreview();
-    setEditorStatus(document.getElementById('pageEditorForm'),`${activeRarity} background will be removed. Tap Save ${activeRarity} page to finish.`,'ready');
+    setEditorStatus(document.getElementById('pageEditorForm'),'Page background will be removed. Tap Save changes to finish.','ready');
   });
-  ['editPageEyebrow','editPageTitle','editPageDescription','editPageBgEnabled','editPageBgColor','editPageBgMode','editPageHeaderEnabled','editPageHeaderMode']
-    .forEach((id) => document.getElementById(id).addEventListener('input',updatePageEditorLivePreview));
   document.getElementById('editPageHeaderFile').addEventListener('change', async (event) => {
     const input = event.currentTarget;
     await processEditorImage(input,'Rarity header image',async (file) => {
-      pendingPageHeaderBgImage = await resizeImage(file,artworkBounds('rarityHeader'));
-      if (!design.theme.headerHeight) pendingPageHeaderHeight = 220;
+      pendingPageHeaderBgImage = await resizeImage(file,artworkBounds('headerBgImage'));
       document.getElementById('editPageHeaderEnabled').checked = true;
-      updatePageEditorLivePreview();
     });
   });
   document.getElementById('removeEditPageHeaderBtn').addEventListener('click', () => {
     pendingPageHeaderBgImage = '';
-    pendingPageHeaderHeight = undefined;
     document.getElementById('editPageHeaderEnabled').checked = false;
     document.getElementById('editPageHeaderFile').value = '';
-    updatePageEditorLivePreview();
-    setEditorStatus(document.getElementById('pageEditorForm'),`${activeRarity} will use the main header image. Tap Save ${activeRarity} page to finish.`,'ready');
+    setEditorStatus(document.getElementById('pageEditorForm'),'This rarity will use the main header image. Tap Save changes to finish.','ready');
   });
 
-  document.getElementById('pageEditorForm').addEventListener('submit', async (event) => {
+  document.getElementById('pageEditorForm').addEventListener('submit', (event) => {
     event.preventDefault();
     if (!editorReadyToSave(event.currentTarget)) return;
     design.pages[activeRarity] = {
@@ -2655,16 +2035,8 @@
     pageHeader.enabled = document.getElementById('editPageHeaderEnabled').checked;
     pageHeader.mode = document.getElementById('editPageHeaderMode').value;
     if (pendingPageHeaderBgImage !== undefined) pageHeader.image = pendingPageHeaderBgImage;
-    if (pageHeader.enabled && !pageHeader.image) pageHeader.enabled = false;
-    if (pendingPageHeaderHeight !== undefined && pageHeader.enabled) design.theme.headerHeight = pendingPageHeaderHeight;
-    const result = await saveDesignWithRarityHeaderFallback(
-      document.getElementById('editPageHeaderFile').files?.[0],
-      pageHeader,
-      event.currentTarget
-    );
-    if (!result.saved) return;
-    const pageName = design.pages[activeRarity].title || activeRarity;
-    finishEditorSave('pageEditorDialog',result.compacted ? `${pageName} header optimized and saved` : `${pageName} page changes saved`);
+    if (!saveDesign()) return;
+    finishEditorSave('pageEditorDialog',`${design.pages[activeRarity].title || activeRarity} page changes saved`);
   });
 
   document.getElementById('editFamilyBgFile').addEventListener('change', async (event) => {
@@ -2672,23 +2044,18 @@
     await processEditorImage(input,'Group background',async (file) => {
       pendingFamilyBgImage = await resizeImage(file,artworkBounds('group'));
       document.getElementById('editFamilyCustomBg').checked = true;
-      updateFamilyEditorLivePreview();
     });
   });
   document.getElementById('removeFamilyBgBtn').addEventListener('click', () => {
     pendingFamilyBgImage = '';
     document.getElementById('editFamilyCustomBg').checked = true;
-    updateFamilyEditorLivePreview();
     setEditorStatus(document.getElementById('familyEditorForm'),'Group background will be removed. Tap Save changes to finish.','ready');
   });
   document.getElementById('restoreFamilyBgBtn').addEventListener('click', () => {
     pendingFamilyBgImage = undefined;
     document.getElementById('editFamilyCustomBg').checked = false;
-    updateFamilyEditorLivePreview();
-    setEditorStatus(document.getElementById('familyEditorForm'),'Whole-site group default selected. Tap Save group to finish.','ready');
+    setEditorStatus(document.getElementById('familyEditorForm'),'Main group-box design selected. Tap Save changes to finish.','ready');
   });
-  ['editFamilyName','editFamilyRarity','editFamilyCustomBg','editFamilyBgColor','editFamilyBgMode']
-    .forEach((id) => document.getElementById(id).addEventListener('input',updateFamilyEditorLivePreview));
 
   document.getElementById('familyEditorForm').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -2757,7 +2124,6 @@
     const prepared = await processEditorImage(input,'Sprite image',async (selectedFile) => {
       pendingVariantImage = await resizeImage(selectedFile,artworkBounds('sprite'));
       setVariantPreview(pendingVariantImage);
-      updateVariantEditorLivePreview();
       clearPreviewObjectUrl();
     });
     if (!prepared) {
@@ -2771,26 +2137,22 @@
     await processEditorImage(input,'Card background',async (file) => {
       pendingVariantCardImage = await resizeImage(file,artworkBounds('card'));
       document.getElementById('editVariantCustomCard').checked = true;
-      updateVariantEditorLivePreview();
     });
   });
   document.getElementById('removeVariantCardBgBtn').addEventListener('click', () => {
     pendingVariantCardImage = '';
     document.getElementById('editVariantCustomCard').checked = true;
-    updateVariantEditorLivePreview();
     setEditorStatus(document.getElementById('variantEditorForm'),'Card background will be removed. Tap Save changes to finish.','ready');
   });
   document.getElementById('restoreVariantCardBgBtn').addEventListener('click', () => {
     pendingVariantCardImage = undefined;
     document.getElementById('editVariantCustomCard').checked = false;
-    updateVariantEditorLivePreview();
-    setEditorStatus(document.getElementById('variantEditorForm'),'Whole-site sprite-card default selected. Tap Save sprite to finish.','ready');
+    setEditorStatus(document.getElementById('variantEditorForm'),'Main card design selected. Tap Save changes to finish.','ready');
   });
 
   document.getElementById('removeVariantImageBtn').addEventListener('click', () => {
     pendingVariantImage = '';
     setVariantPreview('');
-    updateVariantEditorLivePreview();
   });
 
   document.getElementById('restoreVariantBtn').addEventListener('click', () => {
@@ -2801,10 +2163,7 @@
     document.getElementById('editVariantVisible').checked = true;
     pendingVariantImage = variant.image;
     setVariantPreview(variant.image);
-    updateVariantEditorLivePreview();
   });
-  ['editVariantName','editVariantCustomCard','editVariantCardColor','editVariantCardMode']
-    .forEach((id) => document.getElementById(id).addEventListener('input',updateVariantEditorLivePreview));
 
   document.getElementById('deleteVariantBtn').addEventListener('click', () => {
     const familyId = document.getElementById('editVariantFamilyId').value;
@@ -2999,10 +2358,9 @@
 
   populateFontSelects();
   renderAll();
-  const activeHash = `#${activeRarity.toLowerCase()}`;
-  if (location.hash !== activeHash) history.replaceState({ rarity:activeRarity },'',activeHash);
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js').catch(() => {});
-  setTimeout(checkForPublishedDesignUpdate,2500);
+  switchRarity(activeRarity, { historyMode:'replace' });
+  if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));
+  setTimeout(checkForPublishedDesignUpdate,7000);
   setInterval(checkForPublishedDesignUpdate,45000);
   window.addEventListener('online',checkForPublishedDesignUpdate);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForPublishedDesignUpdate(); });
